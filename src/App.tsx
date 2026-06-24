@@ -1,0 +1,67 @@
+import { useState } from 'react'
+import Sidebar from './components/Sidebar'
+import type { Page } from './components/Sidebar'
+import Dashboard from './components/Dashboard'
+import DocumentsView from './components/DocumentsView'
+import StudySetView from './components/StudySetView'
+import CreateStudySetModal from './components/CreateStudySetModal'
+import UploadModal from './components/UploadModal'
+import type { StudySet } from './types'
+
+function App() {
+  const [selectedSet, setSelectedSet] = useState<StudySet | null>(null)
+  const [page, setPage] = useState<Page>('library')
+  const [showUpload, setShowUpload] = useState(false)
+  const [uploadSetId, setUploadSetId] = useState<string | undefined>()
+  const [showCreateSet, setShowCreateSet] = useState(false)
+
+  const openUpload = (studySetId: string) => {
+    setUploadSetId(studySetId)
+    setShowUpload(true)
+  }
+
+  const handleCreateSet = (data: { title: string; subject: string }) => {
+    // TODO: api.studySets.create(data)
+    console.log('Create set:', data)
+  }
+
+  const handleBackToDashboard = () => {
+    setSelectedSet(null)
+    setPage('library')
+  }
+
+  if (selectedSet) {
+    return (
+      <div className="flex h-screen overflow-hidden bg-[#071527]">
+        <StudySetView
+          studySet={selectedSet}
+          onBack={handleBackToDashboard}
+          onImportPdf={(id) => openUpload(id)}
+        />
+        <UploadModal open={showUpload} studySetId={uploadSetId} onClose={() => setShowUpload(false)} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid h-screen overflow-hidden bg-[#071527]" style={{ gridTemplateColumns: '320px 1fr' }}>
+      <Sidebar activePage={page} onNavigate={setPage} documentCount={11} />
+      {page === 'library' && (
+        <Dashboard
+          onSelectSet={setSelectedSet}
+          onCreateSet={() => setShowCreateSet(true)}
+        />
+      )}
+      {page === 'documents' && <DocumentsView />}
+      {page === 'study-tools' && (
+        <Dashboard
+          onSelectSet={setSelectedSet}
+          onCreateSet={() => setShowCreateSet(true)}
+        />
+      )}
+      <CreateStudySetModal open={showCreateSet} onClose={() => setShowCreateSet(false)} onSubmit={handleCreateSet} />
+    </div>
+  )
+}
+
+export default App
