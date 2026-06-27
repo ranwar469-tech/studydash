@@ -3,13 +3,12 @@ export type Page = 'library' | 'documents' | 'study-tools'
 interface Props {
   activePage: Page
   onNavigate: (page: Page) => void
-  documentCount?: number
 }
 
-export default function Sidebar({ activePage, onNavigate, documentCount = 0 }: Props) {
-  const navItems: { label: string; page: Page; count?: string }[] = [
-    { label: 'Library', page: 'library', count: '' },
-    { label: 'Documents', page: 'documents', count: String(documentCount) },
+export default function Sidebar({ activePage, onNavigate }: Props) {
+  const navItems: { label: string; page: Page }[] = [
+    { label: 'Library', page: 'library' },
+    { label: 'Documents', page: 'documents' },
     { label: 'Study tools', page: 'study-tools' },
   ]
 
@@ -44,11 +43,6 @@ export default function Sidebar({ activePage, onNavigate, documentCount = 0 }: P
           >
             <span className="flex items-center justify-between gap-3">
               <span className="font-semibold">{item.label}</span>
-              {item.count && (
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${activePage === item.page ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-300'}`}>
-                  {item.count}
-                </span>
-              )}
             </span>
           </button>
         ))}

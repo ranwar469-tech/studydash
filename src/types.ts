@@ -48,6 +48,7 @@ export interface SourceCitation {
 export interface Document {
   id: string
   study_set_id: string
+  study_set_title?: string
   filename: string
   filepath: string
   chunk_count: number

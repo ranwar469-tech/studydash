@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-from models import StudySet, Flashcard
+from models import Flashcard
 from schemas import FlashcardResponse, FlashcardMasteryUpdate
+from services.flashcard_service import generate_flashcards as gen_cards
 
 router = APIRouter(tags=["flashcards"])
 
@@ -12,11 +13,8 @@ def list_flashcards(set_id: str, db: Session = Depends(get_db)):
     cards = db.query(Flashcard).filter(Flashcard.study_set_id == set_id).all()
     return [
         FlashcardResponse(
-            id=c.id,
-            question=c.question,
-            answer=c.answer,
-            explanation=c.explanation,
-            mastery=c.mastery,
+            id=c.id, question=c.question, answer=c.answer,
+            explanation=c.explanation, mastery=c.mastery,
         )
         for c in cards
     ]
@@ -24,38 +22,13 @@ def list_flashcards(set_id: str, db: Session = Depends(get_db)):
 
 @router.post("/api/study-sets/{set_id}/flashcards/generate", response_model=list[FlashcardResponse], status_code=201)
 def generate_flashcards(set_id: str, db: Session = Depends(get_db)):
-    study_set = db.query(StudySet).filter(StudySet.id == set_id).first()
-    if not study_set:
-        raise HTTPException(404, "Study set not found")
-
-    # TODO: Call DeepSeek to generate flashcards from document chunks
-    # For now, return placeholder cards
-    placeholders = [
-        {"q": "What is a key concept?", "a": f"A key concept from {study_set.title}."},
-        {"q": "Why does this matter?", "a": "Understanding this helps build a strong foundation."},
-        {"q": "How is this applied?", "a": "It applies in real-world scenarios and problem-solving."},
-    ]
-
-    cards = []
-    for p in placeholders:
-        card = Flashcard(
-            study_set_id=set_id,
-            question=p["q"],
-            answer=p["a"],
-        )
-        db.add(card)
-        cards.append(card)
-    db.commit()
-    for c in cards:
-        db.refresh(c)
-
+    cards = gen_cards(set_id)
+    if not cards:
+        raise HTTPException(400, "Could not generate flashcards. Upload documents first.")
     return [
         FlashcardResponse(
-            id=c.id,
-            question=c.question,
-            answer=c.answer,
-            explanation=c.explanation,
-            mastery=c.mastery,
+            id=c["id"], question=c["question"], answer=c["answer"],
+            explanation=c.get("explanation"), mastery=c.get("mastery", "unfamiliar"),
         )
         for c in cards
     ]
@@ -70,9 +43,6 @@ def update_flashcard_mastery(card_id: str, data: FlashcardMasteryUpdate, db: Ses
     db.commit()
     db.refresh(card)
     return FlashcardResponse(
-        id=card.id,
-        question=card.question,
-        answer=card.answer,
-        explanation=card.explanation,
-        mastery=card.mastery,
+        id=card.id, question=card.question, answer=card.answer,
+        explanation=card.explanation, mastery=card.mastery,
     )

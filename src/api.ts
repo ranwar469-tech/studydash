@@ -1,4 +1,4 @@
-import type { StudySet, Flashcard, QuizQuestion, ChatMessage, Document, Note, SourceCitation } from './types'
+import type { StudySet, Flashcard, QuizQuestion, ChatMessage, Note, SourceCitation } from './types'
 
 const BASE = 'http://localhost:8000/api'
 
@@ -14,15 +14,65 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
+/* ── Type mappings ──────────────────────────────────────── */
+
+interface RawStudySet {
+  id: string; title: string; subject: string
+  document_count: number; created_at: string; updated_at: string
+}
+function mapSet(r: RawStudySet): StudySet {
+  const progress = { unfamiliar: 0, learning: 0, familiar: 0, mastered: 0 }
+  return { id: r.id, title: r.title, subject: r.subject, progress, documentCount: r.document_count, lastStudied: '' }
+}
+
+interface RawQuizQuestion {
+  id: string; question: string; options: string[]
+  correct_index: number; explanation: string
+}
+function mapQuiz(r: RawQuizQuestion): QuizQuestion {
+  return { id: r.id, question: r.question, options: r.options, correctIndex: r.correct_index, explanation: r.explanation }
+}
+
+/* ── Study Sets ─────────────────────────────────────────── */
+
+export async function fetchStudySets(): Promise<StudySet[]> {
+  const raw = await request<RawStudySet[]>('/study-sets')
+  return raw.map(mapSet)
+}
+
+export async function createStudySet(data: { title: string; subject: string }): Promise<StudySet> {
+  const raw = await request<RawStudySet>('/study-sets', { method: 'POST', body: JSON.stringify(data) })
+  return mapSet(raw)
+}
+
+export async function deleteStudySet(id: string): Promise<void> {
+  await request(`/study-sets/${id}`, { method: 'DELETE' })
+}
+
+/* ── Documents ──────────────────────────────────────────── */
+
+export interface DocInfo {
+  id: string
+  study_set_id: string
+  study_set_title: string
+  filename: string
+  chunk_count: number
+  uploaded_at: string
+}
+
+export async function fetchAllDocuments(): Promise<DocInfo[]> {
+  return request<DocInfo[]>('/documents')
+}
+
 export async function uploadDocument(
   setId: string,
   file: File,
   onProgress?: (pct: number) => void,
-): Promise<Document> {
+): Promise<DocInfo> {
   const form = new FormData()
   form.append('file', file)
-  const xhr = new XMLHttpRequest()
   return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
     })
@@ -34,6 +84,12 @@ export async function uploadDocument(
     xhr.open('POST', `${BASE}/study-sets/${setId}/documents`)
     xhr.send(form)
   })
+}
+
+/* ── Chat ───────────────────────────────────────────────── */
+
+export async function fetchChatHistory(setId: string): Promise<ChatMessage[]> {
+  return request<ChatMessage[]>(`/study-sets/${setId}/chat`)
 }
 
 export async function sendChatMessage(
@@ -62,7 +118,7 @@ export async function sendChatMessage(
         const data = line.slice(6)
         if (data === '[DONE]') return
         if (data.startsWith('[SOURCES]')) {
-          try { onSources(JSON.parse(data.slice(9))) } catch {}
+          try { onSources(JSON.parse(data.slice(9))) } catch { /* ignore */ }
         } else {
           onChunk(data)
         }
@@ -71,55 +127,64 @@ export async function sendChatMessage(
   }
 }
 
-export const studySets = {
-  list: () => request<StudySet[]>('/study-sets'),
-  create: (data: { title: string; subject: string }) =>
-    request<StudySet>('/study-sets', { method: 'POST', body: JSON.stringify(data) }),
-  get: (id: string) => request<StudySet>(`/study-sets/${id}`),
-  del: (id: string) => request<void>(`/study-sets/${id}`, { method: 'DELETE' }),
+/* ── Flashcards ─────────────────────────────────────────── */
+
+export async function fetchFlashcards(setId: string): Promise<Flashcard[]> {
+  return request<Flashcard[]>(`/study-sets/${setId}/flashcards`)
 }
 
-export const documents = {
-  list: (setId: string) => request<Document[]>(`/study-sets/${setId}/documents`),
-  del: (id: string) => request<void>(`/documents/${id}`, { method: 'DELETE' }),
+export async function generateFlashcards(setId: string): Promise<Flashcard[]> {
+  return request<Flashcard[]>(`/study-sets/${setId}/flashcards/generate`, { method: 'POST' })
 }
 
-export const chat = {
-  history: (setId: string) => request<ChatMessage[]>(`/study-sets/${setId}/chat`),
+export async function updateFlashcardMastery(id: string, mastery: string): Promise<void> {
+  await request(`/flashcards/${id}`, { method: 'PATCH', body: JSON.stringify({ mastery }) })
 }
 
-export const flashcards = {
-  list: (setId: string) => request<Flashcard[]>(`/study-sets/${setId}/flashcards`),
-  generate: (setId: string) =>
-    request<Flashcard[]>(`/study-sets/${setId}/flashcards/generate`, { method: 'POST' }),
-  updateMastery: (id: string, mastery: string) =>
-    request<void>(`/flashcards/${id}`, { method: 'PATCH', body: JSON.stringify({ mastery }) }),
+/* ── Quiz ───────────────────────────────────────────────── */
+
+export async function fetchQuiz(setId: string): Promise<QuizQuestion[]> {
+  const raw = await request<RawQuizQuestion[]>(`/study-sets/${setId}/quiz`)
+  return raw.map(mapQuiz)
 }
 
-export const quiz = {
-  list: (setId: string) => request<QuizQuestion[]>(`/study-sets/${setId}/quiz`),
-  generate: (setId: string) =>
-    request<QuizQuestion[]>(`/study-sets/${setId}/quiz/generate`, { method: 'POST' }),
-  submit: (setId: string, answers: { question_id: string; selected_index: number }[]) =>
-    request<{ score: number; total: number }>(`/study-sets/${setId}/quiz/submit`, {
-      method: 'POST',
-      body: JSON.stringify({ answers }),
-    }),
+export async function generateQuiz(setId: string): Promise<QuizQuestion[]> {
+  const raw = await request<RawQuizQuestion[]>(`/study-sets/${setId}/quiz/generate`, { method: 'POST' })
+  return raw.map(mapQuiz)
 }
 
-export const summary = {
-  generate: (setId: string) =>
-    request<{ content: string; sections: { title: string; desc: string }[]; takeaways: string[] }>(
-      `/study-sets/${setId}/summary`,
-      { method: 'POST' },
-    ),
+export async function submitQuiz(
+  setId: string,
+  answers: { question_id: string; selected_index: number }[],
+): Promise<{ score: number; total: number }> {
+  return request(`/study-sets/${setId}/quiz/submit`, {
+    method: 'POST',
+    body: JSON.stringify({ answers }),
+  })
 }
 
-export const notes = {
-  list: (setId: string) => request<Note[]>(`/study-sets/${setId}/notes`),
-  create: (setId: string, data: { title: string; content: string }) =>
-    request<Note>(`/study-sets/${setId}/notes`, { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: { title?: string; content?: string }) =>
-    request<Note>(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  del: (id: string) => request<void>(`/notes/${id}`, { method: 'DELETE' }),
+/* ── Summary ────────────────────────────────────────────── */
+
+export async function generateSummary(
+  setId: string,
+): Promise<{ content: string; sections: { title: string; desc: string }[]; takeaways: string[] }> {
+  return request(`/study-sets/${setId}/summary`, { method: 'POST' })
+}
+
+/* ── Notes ──────────────────────────────────────────────── */
+
+export async function fetchNotes(setId: string): Promise<Note[]> {
+  return request<Note[]>(`/study-sets/${setId}/notes`)
+}
+
+export async function createNote(setId: string, data: { title: string; content: string }): Promise<Note> {
+  return request<Note>(`/study-sets/${setId}/notes`, { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function updateNote(id: string, data: { title?: string; content?: string }): Promise<Note> {
+  return request<Note>(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  await request(`/notes/${id}`, { method: 'DELETE' })
 }

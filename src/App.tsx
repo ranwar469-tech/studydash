@@ -7,6 +7,7 @@ import StudySetView from './components/StudySetView'
 import CreateStudySetModal from './components/CreateStudySetModal'
 import UploadModal from './components/UploadModal'
 import type { StudySet } from './types'
+import { createStudySet } from './api'
 
 function App() {
   const [selectedSet, setSelectedSet] = useState<StudySet | null>(null)
@@ -20,9 +21,13 @@ function App() {
     setShowUpload(true)
   }
 
-  const handleCreateSet = (data: { title: string; subject: string }) => {
-    // TODO: api.studySets.create(data)
-    console.log('Create set:', data)
+  const handleCreateSet = async (data: { title: string; subject: string }) => {
+    try {
+      const set = await createStudySet(data)
+      setSelectedSet(set)
+    } catch (e) {
+      console.error('Failed to create study set:', e)
+    }
   }
 
   const handleBackToDashboard = () => {
@@ -45,7 +50,7 @@ function App() {
 
   return (
     <div className="grid h-screen overflow-hidden bg-[#071527]" style={{ gridTemplateColumns: '320px 1fr' }}>
-      <Sidebar activePage={page} onNavigate={setPage} documentCount={11} />
+      <Sidebar activePage={page} onNavigate={setPage} />
       {page === 'library' && (
         <Dashboard
           onSelectSet={setSelectedSet}

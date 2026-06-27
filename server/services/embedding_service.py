@@ -1,59 +1,70 @@
-"""Generate embeddings via DeepSeek API and manage ChromaDB collections.
+"""Generate embeddings via ChromaDB's built-in local model and manage ChromaDB collections."""
 
-TODO: Implement real embedding calls and ChromaDB operations.
-"""
-
-
-def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Call DeepSeek embeddings API to convert text chunks to vectors."""
-
-    # TODO:
-    # from openai import OpenAI
-    # client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
-    # response = client.embeddings.create(model=DEEPSEEK_EMBED_MODEL, input=texts)
-    # return [d.embedding for d in response.data]
-
-    return [[0.0]] * len(texts)
+import chromadb
+from config import CHROMA_PERSIST_DIR
 
 
-def embed_query(text: str) -> list[float]:
-    """Embed a single user query string."""
+def _embedding_func():
+    from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+    return ONNXMiniLM_L6_V2()
 
-    return embed_texts([text])[0]
+
+def _collection(study_set_id: str, create: bool = True):
+    db = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
+    if create:
+        return db.get_or_create_collection(
+            name=f"set_{study_set_id}",
+            embedding_function=_embedding_func(),
+        )
+    try:
+        return db.get_collection(
+            name=f"set_{study_set_id}",
+            embedding_function=_embedding_func(),
+        )
+    except Exception:
+        return None
 
 
-def store_chunks(chunks: list[dict], document_id: str, study_set_id: str) -> int:
-    """Store chunk texts + embeddings in ChromaDB collection.
+def store_chunks(chunks: list[dict], document_id: str, study_set_id: str, filename: str) -> int:
+    """ChromaDB automatically generates embeddings using the local ONNX model.
 
     Returns the number of chunks stored.
     """
 
-    # TODO:
-    # import chromadb
-    # client = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
-    # collection = client.get_or_create_collection(f"set_{study_set_id}")
-    # texts = [c["text"] for c in chunks]
-    # ids = [f"{document_id}_chunk_{c['chunk_index']}" for c in chunks]
-    # metadatas = [{"document_id": document_id, "filename": c["filename"], "page": c["page"]} for c in chunks]
-    # embeddings = embed_texts(texts)
-    # collection.add(ids=ids, documents=texts, embeddings=embeddings, metadatas=metadatas)
-    # return len(chunks)
+    collection = _collection(study_set_id)
+    existing = collection.get(where={"document_id": document_id})
+    if existing["ids"]:
+        collection.delete(ids=existing["ids"])
 
-    return 0
+    texts = [c["text"] for c in chunks]
+    ids = [f"{document_id}_chunk_{c['chunk_index']}" for c in chunks]
+    metadatas = [
+        {
+            "document_id": document_id,
+            "filename": filename,
+            "page": c.get("page", 0),
+            "chunk_index": c["chunk_index"],
+        }
+        for c in chunks
+    ]
+
+    collection.add(ids=ids, documents=texts, metadatas=metadatas)
+    return len(chunks)
 
 
 def delete_chunks(document_id: str, study_set_id: str) -> None:
     """Remove all chunks belonging to a document from ChromaDB."""
 
-    # TODO:
-    # client = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
-    # collection = client.get_or_create_collection(f"set_{study_set_id}")
-    # collection.delete(where={"document_id": document_id})
+    collection = _collection(study_set_id, create=False)
+    if collection:
+        collection.delete(where={"document_id": document_id})
 
 
 def delete_collection(study_set_id: str) -> None:
     """Delete an entire collection when a study set is removed."""
 
-    # TODO:
-    # client = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
-    # client.delete_collection(f"set_{study_set_id}")
+    try:
+        db = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
+        db.delete_collection(f"set_{study_set_id}")
+    except Exception:
+        pass

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { ChatMessage, SourceCitation } from '../types'
-import { chat as chatApi } from '../api'
+import { fetchChatHistory, sendChatMessage } from '../api'
 import LoadingSpinner from './LoadingSpinner'
 
 interface Props {
@@ -17,22 +17,20 @@ export default function ChatView({ studySetId }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [streamingContent, setStreamingContent] = useState('')
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [error, setError] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
+  const assistantId = useRef<string | null>(null)
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, streamingContent])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoadingHistory(true)
       try {
-        const history = await chatApi.history(studySetId)
-        if (!cancelled && history.length > 0) {
-          setMessages([welcomeMessage, ...history])
-        }
+        const history = await fetchChatHistory(studySetId)
+        if (!cancelled && history.length > 0) setMessages([welcomeMessage, ...history])
       } catch {
         // Backend not connected — use welcome message only
       } finally {
@@ -46,30 +44,65 @@ export default function ChatView({ studySetId }: Props) {
   const send = async (text: string) => {
     if (!text.trim() || isStreaming) return
     setError('')
-    setMessages(m => [...m, { id: Date.now().toString(), role: 'user', content: text }])
+
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text }
+    const aid = (Date.now() + 1).toString()
+    assistantId.current = aid
+    const placeholder: ChatMessage = { id: aid, role: 'assistant', content: '' }
+
+    setMessages(m => [...m, userMsg, placeholder])
     setInput('')
     setIsStreaming(true)
-    setStreamingContent('')
 
-    // TODO: Replace with api.sendChatMessage() for real SSE streaming
-    setTimeout(() => {
-      const response = getResponse(text)
-      setStreamingContent('')
-      setMessages(m => [...m, { id: (Date.now() + 1).toString(), role: 'assistant', content: response }])
+    let fullContent = ''
+
+    try {
+      await sendChatMessage(
+        studySetId,
+        text,
+        (chunk) => {
+          fullContent += chunk
+          setMessages(m => {
+            const updated = [...m]
+            const idx = updated.findIndex(msg => msg.id === aid)
+            if (idx !== -1) updated[idx] = { ...updated[idx], content: fullContent }
+            return updated
+          })
+        },
+        (sources) => {
+          setMessages(m => {
+            const updated = [...m]
+            const idx = updated.findIndex(msg => msg.id === aid)
+            if (idx !== -1) updated[idx] = { ...updated[idx], sources }
+            return updated
+          })
+        },
+      )
+      setMessages(m => {
+        const updated = [...m]
+        const idx = updated.findIndex(msg => msg.id === aid)
+        if (idx !== -1) updated[idx] = { ...updated[idx], content: fullContent }
+        return updated
+      })
+    } catch (e: any) {
+      setError(e.message || 'Chat failed')
+      setMessages(m => m.filter(msg => msg.id !== aid))
+    } finally {
       setIsStreaming(false)
-    }, 1000)
+      assistantId.current = null
+    }
   }
 
   if (loadingHistory) {
     return (
-      <main className="flex-1 bg-[#071527]" style={{ width: '100%' }}>
+      <main className="flex flex-1 flex-col bg-[#071527] items-center justify-center">
         <LoadingSpinner label="Loading chat..." />
       </main>
     )
   }
 
   return (
-    <main className="flex flex-1 flex-col overflow-hidden bg-[#071527]" style={{ width: '100%' }}>
+    <main className="flex flex-1 flex-col overflow-hidden bg-[#071527]">
       <header className="shrink-0 px-8 pt-8">
         <div className="w-full rounded-[2rem] bg-[#0d2038] px-7 py-5 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10">
           <p className="text-sm font-bold uppercase tracking-[0.16em] text-orange-500">Study mode</p>
@@ -78,7 +111,7 @@ export default function ChatView({ studySetId }: Props) {
       </header>
 
       {error && (
-        <div className="mt-4 w-full rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300">
+        <div className="mt-4 mx-8 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300">
           {error}
         </div>
       )}
@@ -92,40 +125,31 @@ export default function ChatView({ studySetId }: Props) {
                   ? 'rounded-tr-md bg-[#f97316] text-white shadow-orange-950/20'
                   : 'rounded-tl-md bg-[#0d2038] text-slate-200 ring-1 ring-white/10'
               }`}>
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-                {msg.sources && msg.sources.length > 0 && (
+                {msg.content ? (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                ) : isStreaming && msg.id === assistantId.current ? (
+                  <div className="flex gap-1.5">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-[#f97316]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-[#f97316]" style={{ animationDelay: '0.2s' }} />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-[#f97316]" style={{ animationDelay: '0.4s' }} />
+                  </div>
+                ) : null}
+                {msg.sources && msg.sources.length > 0 && msg.content && (
                   <div className="mt-3 border-t border-white/10 pt-3">
                     <p className="text-xs font-bold text-slate-400 mb-1.5">Sources</p>
                     {msg.sources.map((s: SourceCitation, i: number) => (
-                      <p key={i} className="text-xs text-slate-500">
-                        {s.filename}, p.{s.page}
-                      </p>
+                      <p key={i} className="text-xs text-slate-500">{s.filename}, p.{s.page}</p>
                     ))}
                   </div>
                 )}
               </div>
             </div>
           ))}
-          {isStreaming && (
-            <div className="flex justify-start">
-              <div className="rounded-[1.5rem] rounded-tl-md bg-[#0d2038] px-5 py-4 shadow-sm ring-1 ring-white/10 max-w-[78%]">
-                {streamingContent ? (
-                  <p className="whitespace-pre-wrap text-base leading-relaxed text-slate-200">{streamingContent}</p>
-                ) : (
-                  <div className="flex gap-1.5">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-[#f97316]" />
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-[#f97316]" style={{ animationDelay: '0.2s' }} />
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-[#f97316]" style={{ animationDelay: '0.4s' }} />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
           <div ref={endRef} />
         </div>
       </div>
 
-      {messages.length <= 1 && !isStreaming && (
+      {messages.length <= 2 && !isStreaming && (
         <div className="px-8 pb-4">
           <div className="flex flex-wrap gap-2">
             {['Summarize this document', 'Explain key concepts', 'Generate a quiz', 'Create flashcards'].map(text => (
@@ -156,13 +180,4 @@ export default function ChatView({ studySetId }: Props) {
       </div>
     </main>
   )
-}
-
-function getResponse(q: string): string {
-  const l = q.toLowerCase()
-  if (l.includes('summarize')) return "Here's a summary of your document covering the key concepts and main points. Would you like me to dive deeper into any specific section?"
-  if (l.includes('explain')) return "Let me break down the key concepts for you. This topic covers several important ideas. Which one would you like me to elaborate on?"
-  if (l.includes('quiz')) return "I've generated a quiz based on your materials. Switch to the Quiz tab in the sidebar to take it."
-  if (l.includes('flashcard')) return "I've created flashcards from your study materials. Head over to the Flashcards tab in the sidebar."
-  return "Great question. Based on your study materials, here's what I can tell you. Would you like me to elaborate further or show you a code example?"
 }

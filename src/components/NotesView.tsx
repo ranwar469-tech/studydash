@@ -1,40 +1,50 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import type { Note } from '../types'
+import { fetchNotes, createNote as apiCreateNote, deleteNote } from '../api'
 import EmptyState from './EmptyState'
+import LoadingSpinner from './LoadingSpinner'
 
 interface Props {
   studySetId: string
 }
 
-interface NoteItem {
-  title: string
-  content: string
-  date: string
-}
-
-const initialNotes: NoteItem[] = [
-  { title: 'Async Programming Quadrants', content: 'Sync + single: function calls / sync + multiple: iterables / async + single: Promises / async + multiple: Observables', date: '2 days ago' },
-  { title: 'Promise Limitations', content: 'No built-in cancellation / single value only / no native retry or backoff / cannot handle streams of events', date: '2 days ago' },
-  { title: 'Observable Operations', content: 'map transforms / filter keeps matches / flatMap flattens nested streams / takeUntil stops on signal', date: 'Yesterday' },
-  { title: 'async/await Reference', content: 'async function returns Promise / await pauses until resolved / try-catch handles errors / still single-value only', date: 'Yesterday' },
-]
-
-export default function NotesView({ studySetId: _studySetId }: Props) {
-  // TODO: Replace with api.notes.list() + api.notes.create()
-  const [notes] = useState<NoteItem[]>(initialNotes)
+export default function NotesView({ studySetId }: Props) {
+  const [notes, setNotes] = useState<Note[]>([])
+  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newContent, setNewContent] = useState('')
 
-  const handleCreate = () => {
-    if (!newTitle.trim() || !newContent.trim()) return
-    // TODO: await api.notes.create(studySetId, { title: newTitle, content: newContent })
-    setNewTitle('')
-    setNewContent('')
-    setShowForm(false)
+  const load = () => {
+    fetchNotes(studySetId)
+      .then(setNotes)
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }
 
+  useEffect(() => { load() }, [studySetId])
+
+  const handleCreate = async () => {
+    if (!newTitle.trim() || !newContent.trim()) return
+    try {
+      await apiCreateNote(studySetId, { title: newTitle.trim(), content: newContent.trim() })
+      setNewTitle('')
+      setNewContent('')
+      setShowForm(false)
+      load()
+    } catch (e: any) {
+      console.error(e.message)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try { await deleteNote(id); load() } catch {}
+  }
+
+  if (loading) return <main className="flex-1 bg-[#071527]"><LoadingSpinner /></main>
+
   return (
-    <main className="flex-1 overflow-y-auto bg-[#071527]" style={{ width: '100%' }}>
+    <main className="flex-1 overflow-y-auto bg-[#071527]">
       <div className="w-full px-8 py-8">
         <header className="mb-6 flex flex-col gap-4 rounded-[2rem] bg-[#0d2038] p-7 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -75,7 +85,7 @@ export default function NotesView({ studySetId: _studySetId }: Props) {
           </div>
         )}
 
-        {notes.length === 0 ? (
+        {notes.length === 0 && !showForm ? (
           <EmptyState
             title="No notes yet"
             description="Write notes to capture key insights from your study materials."
@@ -83,11 +93,19 @@ export default function NotesView({ studySetId: _studySetId }: Props) {
           />
         ) : (
           <div className="grid gap-4">
-            {notes.map((note, i) => (
-              <article key={i} className="rounded-[2rem] bg-[#0d2038] p-6 shadow-xl shadow-black/10 ring-1 ring-white/10 transition hover:-translate-y-0.5 hover:ring-orange-400/30">
+            {notes.map(note => (
+              <article key={note.id} className="group rounded-[2rem] bg-[#0d2038] p-6 shadow-xl shadow-black/10 ring-1 ring-white/10 transition hover:-translate-y-0.5 hover:ring-orange-400/30">
                 <div className="mb-3 flex items-start justify-between gap-4">
                   <h3 className="text-lg font-black text-white">{note.title}</h3>
-                  <span className="shrink-0 rounded-full bg-[#132a49] px-3 py-1 text-xs font-bold text-orange-200">{note.date}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="rounded-full bg-[#132a49] px-3 py-1 text-xs font-bold text-orange-200">
+                      {note.created_at ? new Date(note.created_at).toLocaleDateString() : ''}
+                    </span>
+                    <button onClick={() => handleDelete(note.id)}
+                      className="rounded-xl p-1.5 text-slate-500 opacity-0 transition hover:bg-red-500/15 hover:text-red-400 group-hover:opacity-100">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
                 </div>
                 <p className="text-base leading-relaxed text-slate-400">{note.content}</p>
               </article>

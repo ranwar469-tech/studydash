@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import StudySet
 from schemas import StudySetCreate, StudySetResponse
+from services.embedding_service import delete_collection
 
 router = APIRouter(prefix="/api/study-sets", tags=["study-sets"])
 
@@ -59,5 +60,6 @@ def delete_study_set(set_id: str, db: Session = Depends(get_db)):
     s = db.query(StudySet).filter(StudySet.id == set_id).first()
     if not s:
         raise HTTPException(404, "Study set not found")
+    delete_collection(set_id)
     db.delete(s)
     db.commit()

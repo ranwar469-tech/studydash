@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { uploadDocument } from '../api'
 
 interface Props {
   open: boolean
@@ -18,7 +19,7 @@ export default function UploadModal({ open, studySetId, onClose }: Props) {
 
   const handleFile = (f: File | null) => {
     if (!f) return
-    if (f.type !== 'application/pdf') {
+    if (!f.name.endsWith('.pdf')) {
       setError('Only PDF files are supported')
       return
     }
@@ -27,25 +28,21 @@ export default function UploadModal({ open, studySetId, onClose }: Props) {
   }
 
   const handleUpload = async () => {
-    if (!file) return
+    if (!file || !studySetId) return
     setUploading(true)
     setProgress(0)
     setError('')
 
-    // Simulated upload for demo — replace with: api.uploadDocument(...)
-    let pct = 0
-    const interval = setInterval(() => {
-      pct += Math.random() * 25
-      if (pct >= 100) {
-        pct = 100
-        clearInterval(interval)
-        setProgress(100)
-        setUploading(false)
-        setDone(true)
-        setTimeout(() => { onClose(); setFile(null); setDone(false); setProgress(0) }, 1500)
-      }
-      setProgress(Math.round(pct))
-    }, 400)
+    try {
+      await uploadDocument(studySetId, file, (pct) => setProgress(pct))
+      setProgress(100)
+      setUploading(false)
+      setDone(true)
+      setTimeout(() => { onClose(); setFile(null); setDone(false); setProgress(0) }, 1500)
+    } catch (e: any) {
+      setError(e.message || 'Upload failed')
+      setUploading(false)
+    }
   }
 
   return (

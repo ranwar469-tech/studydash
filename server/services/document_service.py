@@ -1,40 +1,71 @@
-"""Extract text from PDFs, chunk it, and prepare for embedding.
+"""Extract text from PDFs, chunk it, and prepare for embedding."""
 
-TODO: Implement real PDF extraction with PyMuPDF.
-"""
-
-
-def extract_text(filepath: str) -> str:
-    """Extract plain text from a PDF file, returning text per page."""
-
-    # TODO: import fitz (PyMuPDF)
-    # doc = fitz.open(filepath)
-    # pages = [page.get_text() for page in doc]
-    # doc.close()
-    # return "\n\n".join(pages)
-
-    return ""
+import fitz
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[dict]:
-    """Split text into overlapping chunks with metadata."""
+def extract_text(filepath: str) -> list[dict]:
+    """Extract text from a PDF file.
 
-    # TODO: implement text splitting with overlap tracking
-    # Each chunk: { "text": str, "page": int, "chunk_index": int }
+    Returns a list of {page, text} dicts, one per page that has content.
+    """
 
-    return []
+    doc = fitz.open(filepath)
+    pages = []
+    for i, page in enumerate(doc):
+        text = page.get_text().strip()
+        if text:
+            pages.append({"page": i + 1, "text": text})
+    doc.close()
+    return pages
 
 
-def process_document(filepath: str, document_id: str, study_set_id: str, chunk_size: int = 500, overlap: int = 50) -> int:
+def chunk_text(pages: list[dict], chunk_size: int = 500, overlap: int = 50) -> list[dict]:
+    """Split extracted pages into overlapping text chunks using LangChain.
+
+    Uses RecursiveCharacterTextSplitter which splits at natural boundaries:
+    paragraph breaks → line breaks → sentence endings → spaces → characters.
+
+    Each chunk dict: {text, chunk_index, page}
+    """
+
+    if not pages or chunk_size <= 0:
+        return []
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        separators=["\n\n", "\n", ". ", " ", ""],
+        length_function=len,
+    )
+
+    chunks = []
+    for p in pages:
+        page_chunks = splitter.split_text(p["text"])
+        for text in page_chunks:
+            if text.strip():
+                chunks.append({
+                    "text": text,
+                    "chunk_index": len(chunks),
+                    "page": p["page"],
+                })
+
+    return chunks
+
+
+def process_document(filepath: str, filename: str, document_id: str, study_set_id: str,
+                     chunk_size: int = 500, overlap: int = 50) -> int:
     """Full pipeline: extract → chunk → embed → store in ChromaDB.
 
     Returns the number of chunks stored.
     """
 
-    # TODO:
-    # text = extract_text(filepath)
-    # chunks = chunk_text(text, chunk_size, overlap)
-    # embed_and_store(chunks, document_id, study_set_id)
-    # return len(chunks)
+    from services.embedding_service import store_chunks
 
-    return 0
+    pages = extract_text(filepath)
+    chunks = chunk_text(pages, chunk_size, overlap)
+    if not chunks:
+        return 0
+
+    store_chunks(chunks, document_id, study_set_id, filename)
+    return len(chunks)

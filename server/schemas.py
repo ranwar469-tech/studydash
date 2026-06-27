@@ -19,6 +19,7 @@ class StudySetResponse(BaseModel):
 class DocumentResponse(BaseModel):
     id: str
     study_set_id: str
+    study_set_title: str = ""
     filename: str
     chunk_count: int
     uploaded_at: datetime

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Flashcard } from '../types'
+import { fetchFlashcards, generateFlashcards } from '../api'
 import LoadingSpinner from './LoadingSpinner'
 import EmptyState from './EmptyState'
 
@@ -7,34 +8,44 @@ interface Props {
   studySetId: string
 }
 
-const initialCards: Flashcard[] = [
-  { id: '1', question: 'What is a Promise in JavaScript?', answer: 'An object representing the eventual completion or failure of an async operation. Chainable with .then(), catch errors with .catch().' },
-  { id: '2', question: 'What is callback hell?', answer: 'Nested callbacks multiple levels deep, making code difficult to read and maintain. Solved by Promises.' },
-  { id: '3', question: 'How does async/await work?', answer: 'Syntactic sugar over Promises. await pauses until Promise resolves. try/catch handles errors naturally.' },
-  { id: '4', question: 'What is an Observable?', answer: 'A stream of values emitted over time. Unlike Promises, Observables emit multiple values asynchronously.' },
-  { id: '5', question: 'What is backpressure?', answer: 'Flow control preventing producers from overwhelming consumers. Allows consumers to signal readiness for more data.' },
-]
-
-export default function FlashcardView({ studySetId: _studySetId }: Props) {
-  // TODO: Replace with api.flashcards.list() + api.flashcards.generate()
-  const [cards] = useState<Flashcard[]>(initialCards)
+export default function FlashcardView({ studySetId }: Props) {
+  const [cards, setCards] = useState<Flashcard[]>([])
   const [idx, setIdx] = useState(0)
   const [flipped, setFlipped] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchFlashcards(studySetId)
+      .then(data => { if (!cancelled) setCards(data) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [studySetId])
 
   const handleGenerate = async () => {
     setGenerating(true)
-    // TODO: const result = await api.flashcards.generate(studySetId)
-    setTimeout(() => setGenerating(false), 2000)
+    try {
+      const data = await generateFlashcards(studySetId)
+      setCards(data)
+      setIdx(0)
+      setFlipped(false)
+    } catch (e: any) {
+      console.error(e.message)
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const next = () => { setFlipped(false); setIdx(i => (i + 1) % cards.length) }
   const prev = () => { setFlipped(false); setIdx(i => (i - 1 + cards.length) % cards.length) }
-  const card = cards[idx]
+
+  if (loading) return <main className="flex-1 bg-[#071527]"><LoadingSpinner /></main>
 
   if (cards.length === 0 && !generating) {
     return (
-      <main className="flex flex-1 flex-col overflow-y-auto bg-[#071527]" style={{ width: '100%' }}>
+      <main className="flex flex-1 flex-col bg-[#071527]">
         <EmptyState
           title="No flashcards yet"
           description="Generate flashcards from your study materials using AI."
@@ -43,6 +54,8 @@ export default function FlashcardView({ studySetId: _studySetId }: Props) {
       </main>
     )
   }
+
+  const card = cards[idx]
 
   return (
     <main className="flex-1 flex flex-col bg-[#071527]">
@@ -84,6 +97,9 @@ export default function FlashcardView({ studySetId: _studySetId }: Props) {
                   <div className="card-back absolute inset-0 flex flex-col items-center justify-center rounded-[2rem] bg-[#10243d] p-10 text-center text-white shadow-2xl shadow-black/25 ring-1 ring-orange-400/20">
                     <p className="mb-4 text-sm font-black uppercase tracking-[0.16em] text-teal-300">Answer</p>
                     <p className="max-w-xl text-xl leading-relaxed text-slate-100">{card.answer}</p>
+                    {card.explanation && (
+                      <p className="mt-4 text-sm text-slate-400 max-w-lg">{card.explanation}</p>
+                    )}
                   </div>
                 </div>
               </div>
