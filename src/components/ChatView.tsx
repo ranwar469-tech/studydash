@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import type { ChatMessage, SourceCitation } from '../types'
 import { fetchChatHistory, sendChatMessage } from '../api'
 import LoadingSpinner from './LoadingSpinner'
 
 interface Props {
   studySetId: string
+  selectedDocIds: string[]
 }
 
 const welcomeMessage: ChatMessage = {
@@ -13,7 +15,7 @@ const welcomeMessage: ChatMessage = {
   content: "Hi! I'm your AI Study Tutor. I've read through your uploaded materials. Ask me anything and I can explain concepts, give examples, or help you work through problems.",
 }
 
-export default function ChatView({ studySetId }: Props) {
+export default function ChatView({ studySetId, selectedDocIds }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -21,18 +23,29 @@ export default function ChatView({ studySetId }: Props) {
   const [error, setError] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const assistantId = useRef<string | null>(null)
+  const quickPrompts = useMemo(() => ([
+    'Summarize the key ideas',
+    'Explain the hardest concept',
+    'Generate a quiz from these notes',
+    'Make flashcards from the material',
+  ]), [])
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages, isStreaming])
 
   useEffect(() => {
     let cancelled = false
+    setLoadingHistory(true)
+
     async function load() {
-      setLoadingHistory(true)
       try {
         const history = await fetchChatHistory(studySetId)
-        if (!cancelled && history.length > 0) setMessages([welcomeMessage, ...history])
+        if (!cancelled) {
+          setMessages(history.length > 0 ? [welcomeMessage, ...history] : [welcomeMessage])
+        }
       } catch {
-        // Backend not connected — use welcome message only
+        if (!cancelled) setMessages([welcomeMessage])
       } finally {
         if (!cancelled) setLoadingHistory(false)
       }
@@ -45,21 +58,21 @@ export default function ChatView({ studySetId }: Props) {
     if (!text.trim() || isStreaming) return
     setError('')
 
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text }
-    const aid = (Date.now() + 1).toString()
+    const userMsg: ChatMessage = { id: `${Date.now()}-user`, role: 'user', content: text.trim() }
+    const aid = `${Date.now()}-assistant`
     assistantId.current = aid
     const placeholder: ChatMessage = { id: aid, role: 'assistant', content: '' }
 
     setMessages(m => [...m, userMsg, placeholder])
-    setInput('')
     setIsStreaming(true)
+    setInput('')
 
     let fullContent = ''
 
     try {
       await sendChatMessage(
         studySetId,
-        text,
+        text.trim(),
         (chunk) => {
           fullContent += chunk
           setMessages(m => {
@@ -77,6 +90,7 @@ export default function ChatView({ studySetId }: Props) {
             return updated
           })
         },
+        selectedDocIds.length > 0 ? selectedDocIds : undefined,
       )
       setMessages(m => {
         const updated = [...m]
@@ -95,38 +109,45 @@ export default function ChatView({ studySetId }: Props) {
 
   if (loadingHistory) {
     return (
-      <main className="flex flex-1 flex-col bg-[#071527] items-center justify-center">
+      <main className="flex h-full min-h-0 w-full items-center justify-center bg-[#071527] px-6">
         <LoadingSpinner label="Loading chat..." />
       </main>
     )
   }
 
   return (
-    <main className="flex flex-1 flex-col overflow-hidden bg-[#071527]">
-      <header className="shrink-0 px-8 pt-8">
-        <div className="w-full rounded-[2rem] bg-[#0d2038] px-7 py-5 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10">
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-orange-500">Study mode</p>
-          <h1 className="mt-1 text-3xl font-black text-white">AI Tutor</h1>
+    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#071527]">
+      <header className="shrink-0 px-8 pt-6">
+        <div className="rounded-4xl bg-[#0d2038] px-5 py-3.5 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <h1 className="text-2xl font-black text-white">AI Tutor</h1>
+            <div className="rounded-2xl bg-[#071527] px-4 py-3 text-right ring-1 ring-white/10">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Document scope</p>
+              <p className="mt-1 text-sm font-semibold text-slate-200">{selectedDocIds.length > 0 ? `${selectedDocIds.length} selected` : 'All documents'}</p>
+            </div>
+          </div>
         </div>
       </header>
 
       {error && (
-        <div className="mt-4 mx-8 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300">
+        <div className="mx-8 mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300">
           {error}
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
-        <div className="w-full space-y-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+        <div className="space-y-5">
           {messages.map(msg => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[78%] rounded-[1.5rem] px-5 py-4 text-base leading-relaxed shadow-sm ${
+              <div className={`max-w-[min(52rem,84%)] rounded-3xl px-5 py-4 text-base leading-relaxed shadow-sm ${
                 msg.role === 'user'
                   ? 'rounded-tr-md bg-[#f97316] text-white shadow-orange-950/20'
                   : 'rounded-tl-md bg-[#0d2038] text-slate-200 ring-1 ring-white/10'
               }`}>
                 {msg.content ? (
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  <div className="prose prose-invert prose-sm max-w-none [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-4 [&_strong]:text-white [&_p]:mb-2 [&_ul]:mb-2">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
                 ) : isStreaming && msg.id === assistantId.current ? (
                   <div className="flex gap-1.5">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-[#f97316]" />
@@ -134,7 +155,7 @@ export default function ChatView({ studySetId }: Props) {
                     <span className="h-2 w-2 animate-pulse rounded-full bg-[#f97316]" style={{ animationDelay: '0.4s' }} />
                   </div>
                 ) : null}
-                {msg.sources && msg.sources.length > 0 && msg.content && (
+                {msg.sources && msg.sources.length > 0 && (
                   <div className="mt-3 border-t border-white/10 pt-3">
                     <p className="text-xs font-bold text-slate-400 mb-1.5">Sources</p>
                     {msg.sources.map((s: SourceCitation, i: number) => (
@@ -150,11 +171,14 @@ export default function ChatView({ studySetId }: Props) {
       </div>
 
       {messages.length <= 2 && !isStreaming && (
-        <div className="px-8 pb-4">
-          <div className="flex flex-wrap gap-2">
-            {['Summarize this document', 'Explain key concepts', 'Generate a quiz', 'Create flashcards'].map(text => (
-              <button key={text} onClick={() => send(text)}
-                className="rounded-2xl bg-[#10243d] px-4 py-3 text-sm font-bold text-slate-200 shadow-sm ring-1 ring-white/10 transition hover:-translate-y-0.5 hover:bg-[#163254] hover:text-orange-300">
+        <div className="shrink-0 px-8 pb-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {quickPrompts.map(text => (
+              <button
+                key={text}
+                onClick={() => send(text)}
+                className="rounded-2xl bg-[#10243d] px-4 py-3 text-left text-sm font-bold text-slate-200 shadow-sm ring-1 ring-white/10 transition hover:-translate-y-0.5 hover:bg-[#163254] hover:text-orange-300"
+              >
                 {text}
               </button>
             ))}
@@ -163,19 +187,26 @@ export default function ChatView({ studySetId }: Props) {
       )}
 
       <div className="shrink-0 px-8 pb-8">
-        <div className="flex gap-3 rounded-[1.75rem] bg-[#0d2038] p-3 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10">
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && send(input)}
-            placeholder="Ask a question..."
-            disabled={isStreaming}
-            className="min-w-0 flex-1 rounded-2xl bg-[#071527] px-5 py-4 text-base text-white outline-none placeholder:text-slate-500 disabled:opacity-50 focus:ring-2 focus:ring-orange-400/50"
-          />
-          <button onClick={() => send(input)} disabled={!input.trim() || isStreaming}
-            className="shrink-0 rounded-2xl bg-[#f97316] px-6 py-4 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:bg-[#fb923c] disabled:opacity-40">
-            Send
-          </button>
+        <div className="rounded-[1.75rem] bg-[#0d2038] p-3 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10">
+          <div className="flex gap-3">
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void send(input)
+                }
+              }}
+              placeholder="Ask a question..."
+              disabled={isStreaming}
+              className="min-w-0 flex-1 rounded-2xl bg-[#071527] px-5 py-4 text-base text-white outline-none placeholder:text-slate-500 disabled:opacity-50 focus:ring-2 focus:ring-orange-400/50"
+            />
+            <button onClick={() => send(input)} disabled={!input.trim() || isStreaming}
+              className="shrink-0 rounded-2xl bg-[#f97316] px-6 py-4 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:bg-[#fb923c] disabled:opacity-40">
+              Send
+            </button>
+          </div>
         </div>
       </div>
     </main>

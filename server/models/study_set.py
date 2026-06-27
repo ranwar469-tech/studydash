@@ -19,3 +19,4 @@ class StudySet(Base):
     quiz_questions = relationship("QuizQuestion", back_populates="study_set", cascade="all, delete-orphan")
     notes = relationship("Note", back_populates="study_set", cascade="all, delete-orphan")
     chat_messages = relationship("ChatMessage", back_populates="study_set", cascade="all, delete-orphan")
+    summary = relationship("Summary", back_populates="study_set", uselist=False, cascade="all, delete-orphan")

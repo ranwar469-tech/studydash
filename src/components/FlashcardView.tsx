@@ -6,14 +6,16 @@ import EmptyState from './EmptyState'
 
 interface Props {
   studySetId: string
+  selectedDocIds: string[]
 }
 
-export default function FlashcardView({ studySetId }: Props) {
+export default function FlashcardView({ studySetId, selectedDocIds }: Props) {
   const [cards, setCards] = useState<Flashcard[]>([])
   const [idx, setIdx] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [genError, setGenError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -26,13 +28,14 @@ export default function FlashcardView({ studySetId }: Props) {
 
   const handleGenerate = async () => {
     setGenerating(true)
+    setGenError('')
     try {
-      const data = await generateFlashcards(studySetId)
+      const data = await generateFlashcards(studySetId, selectedDocIds.length > 0 ? selectedDocIds : undefined)
       setCards(data)
       setIdx(0)
       setFlipped(false)
     } catch (e: any) {
-      console.error(e.message)
+      setGenError(e.message || 'Generation failed')
     } finally {
       setGenerating(false)
     }
@@ -41,11 +44,11 @@ export default function FlashcardView({ studySetId }: Props) {
   const next = () => { setFlipped(false); setIdx(i => (i + 1) % cards.length) }
   const prev = () => { setFlipped(false); setIdx(i => (i - 1 + cards.length) % cards.length) }
 
-  if (loading) return <main className="flex-1 bg-[#071527]"><LoadingSpinner /></main>
+  if (loading) return <main className="h-full w-full bg-[#071527]"><LoadingSpinner /></main>
 
   if (cards.length === 0 && !generating) {
     return (
-      <main className="flex flex-1 flex-col bg-[#071527]">
+      <main className="flex flex-col h-full w-full bg-[#071527]">
         <EmptyState
           title="No flashcards yet"
           description="Generate flashcards from your study materials using AI."
@@ -58,23 +61,30 @@ export default function FlashcardView({ studySetId }: Props) {
   const card = cards[idx]
 
   return (
-    <main className="flex-1 flex flex-col bg-[#071527]">
-      <div className="flex-1 flex flex-col items-center justify-center px-8 py-8">
-        <div className="w-full max-w-5xl flex flex-col items-center gap-6">
+    <main className="flex flex-col h-full w-full overflow-hidden bg-[#071527]">
+      <header className="shrink-0 px-8 pt-6">
+        <div className="rounded-4xl bg-[#0d2038] px-5 py-3.5 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10">
           <div className="flex w-full items-center justify-between gap-4">
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.16em] text-orange-500">Flashcards</p>
-              <h2 className="mt-1 text-3xl font-black text-white">Card {idx + 1} of {cards.length}</h2>
+              <h2 className="mt-1 text-2xl font-black text-white">Card {idx + 1} of {cards.length}</h2>
             </div>
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="rounded-2xl bg-[#10243d] px-5 py-3 text-sm font-bold text-slate-200 ring-1 ring-white/10 transition hover:bg-[#163254] disabled:opacity-50"
+              className="shrink-0 rounded-2xl bg-[#10243d] px-5 py-2.5 text-sm font-bold text-slate-200 ring-1 ring-white/10 transition hover:bg-[#163254] disabled:opacity-50"
             >
               {generating ? 'Generating...' : 'Regenerate'}
             </button>
           </div>
-
+        </div>
+      </header>
+      <div className="flex-1 flex flex-col items-center justify-center px-8 py-6">
+          {genError && (
+            <div className="mb-4 w-full max-w-3xl rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300">
+              {genError}
+            </div>
+          )}
           {generating ? (
             <LoadingSpinner label="Generating flashcards..." />
           ) : (
@@ -85,7 +95,7 @@ export default function FlashcardView({ studySetId }: Props) {
                 ))}
               </div>
 
-              <div className="w-full max-w-3xl perspective" style={{ minHeight: '380px' }}>
+              <div className="w-full max-w-3xl perspective mx-auto" style={{ minHeight: '380px' }}>
                 <div className={`card-inner relative w-full cursor-pointer ${flipped ? 'card-flipped' : ''}`}
                   style={{ minHeight: '380px' }}
                   onClick={() => setFlipped(!flipped)}>
@@ -111,7 +121,6 @@ export default function FlashcardView({ studySetId }: Props) {
             </>
           )}
         </div>
-      </div>
     </main>
   )
 }

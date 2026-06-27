@@ -60,6 +60,7 @@ class ChatMessageResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    document_ids: list[str] | None = None
 
 
 class NoteCreate(BaseModel):

@@ -5,9 +5,10 @@ interface Props {
   open: boolean
   studySetId?: string
   onClose: () => void
+  onUploadComplete?: () => void
 }
 
-export default function UploadModal({ open, studySetId, onClose }: Props) {
+export default function UploadModal({ open, studySetId, onClose, onUploadComplete }: Props) {
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -38,6 +39,7 @@ export default function UploadModal({ open, studySetId, onClose }: Props) {
       setProgress(100)
       setUploading(false)
       setDone(true)
+      onUploadComplete?.()
       setTimeout(() => { onClose(); setFile(null); setDone(false); setProgress(0) }, 1500)
     } catch (e: any) {
       setError(e.message || 'Upload failed')

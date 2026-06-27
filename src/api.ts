@@ -11,6 +11,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const body = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(body.detail ?? `API error ${res.status}`)
   }
+  if (res.status === 204) return undefined as T
   return res.json()
 }
 
@@ -64,6 +65,14 @@ export async function fetchAllDocuments(): Promise<DocInfo[]> {
   return request<DocInfo[]>('/documents')
 }
 
+export async function fetchSetDocuments(setId: string): Promise<DocInfo[]> {
+  return request<DocInfo[]>(`/study-sets/${setId}/documents`)
+}
+
+export async function deleteDocument(docId: string): Promise<void> {
+  await request(`/documents/${docId}`, { method: 'DELETE' })
+}
+
 export async function uploadDocument(
   setId: string,
   file: File,
@@ -97,11 +106,12 @@ export async function sendChatMessage(
   message: string,
   onChunk: (text: string) => void,
   onSources: (sources: SourceCitation[]) => void,
+  documentIds?: string[],
 ): Promise<void> {
   const res = await fetch(`${BASE}/study-sets/${setId}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, document_ids: documentIds }),
   })
   if (!res.ok) throw new Error('Chat request failed')
   const reader = res.body!.getReader()
@@ -133,8 +143,11 @@ export async function fetchFlashcards(setId: string): Promise<Flashcard[]> {
   return request<Flashcard[]>(`/study-sets/${setId}/flashcards`)
 }
 
-export async function generateFlashcards(setId: string): Promise<Flashcard[]> {
-  return request<Flashcard[]>(`/study-sets/${setId}/flashcards/generate`, { method: 'POST' })
+export async function generateFlashcards(setId: string, documentIds?: string[]): Promise<Flashcard[]> {
+  return request<Flashcard[]>(`/study-sets/${setId}/flashcards/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ document_ids: documentIds }),
+  })
 }
 
 export async function updateFlashcardMastery(id: string, mastery: string): Promise<void> {
@@ -148,8 +161,11 @@ export async function fetchQuiz(setId: string): Promise<QuizQuestion[]> {
   return raw.map(mapQuiz)
 }
 
-export async function generateQuiz(setId: string): Promise<QuizQuestion[]> {
-  const raw = await request<RawQuizQuestion[]>(`/study-sets/${setId}/quiz/generate`, { method: 'POST' })
+export async function generateQuiz(setId: string, documentIds?: string[]): Promise<QuizQuestion[]> {
+  const raw = await request<RawQuizQuestion[]>(`/study-sets/${setId}/quiz/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ document_ids: documentIds }),
+  })
   return raw.map(mapQuiz)
 }
 
@@ -165,10 +181,20 @@ export async function submitQuiz(
 
 /* ── Summary ────────────────────────────────────────────── */
 
-export async function generateSummary(
+export async function fetchSummary(
   setId: string,
 ): Promise<{ content: string; sections: { title: string; desc: string }[]; takeaways: string[] }> {
-  return request(`/study-sets/${setId}/summary`, { method: 'POST' })
+  return request(`/study-sets/${setId}/summary`)
+}
+
+export async function generateSummary(
+  setId: string,
+  documentIds?: string[],
+): Promise<{ content: string; sections: { title: string; desc: string }[]; takeaways: string[] }> {
+  return request(`/study-sets/${setId}/summary`, {
+    method: 'POST',
+    body: JSON.stringify({ document_ids: documentIds }),
+  })
 }
 
 /* ── Notes ──────────────────────────────────────────────── */

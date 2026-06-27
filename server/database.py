@@ -15,7 +15,7 @@ class Base(DeclarativeBase):
 
 
 def init_db():
-    from models import study_set, document, flashcard, quiz_question, note, chat_message
+    from models import study_set, document, flashcard, quiz_question, note, chat_message, summary
     Base.metadata.create_all(bind=engine)
 
 

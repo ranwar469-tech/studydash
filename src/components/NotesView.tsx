@@ -41,20 +41,18 @@ export default function NotesView({ studySetId }: Props) {
     try { await deleteNote(id); load() } catch {}
   }
 
-  if (loading) return <main className="flex-1 bg-[#071527]"><LoadingSpinner /></main>
+  if (loading) return <main className="h-full w-full bg-[#071527]"><LoadingSpinner /></main>
 
   return (
-    <main className="flex-1 overflow-y-auto bg-[#071527]">
+    <main className="h-full w-full overflow-y-auto bg-[#071527]">
       <div className="w-full px-8 py-8">
-        <header className="mb-6 flex flex-col gap-4 rounded-[2rem] bg-[#0d2038] p-7 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10 sm:flex-row sm:items-center sm:justify-between">
+        <header className="mb-6 flex items-center justify-between gap-4 rounded-4xl bg-[#0d2038] px-5 py-3.5 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.16em] text-orange-500">Notebook</p>
-            <h2 className="mt-1 text-3xl font-black text-white">Notes</h2>
-            <p className="mt-2 text-base text-slate-400">{notes.length} notes saved</p>
+            <h2 className="text-2xl font-black text-white">Notes</h2>
           </div>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="rounded-2xl bg-[#f97316] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:bg-[#fb923c]"
+            className="rounded-2xl bg-[#f97316] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:bg-[#fb923c]"
           >
             {showForm ? 'Cancel' : 'New Note'}
           </button>

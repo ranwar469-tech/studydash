@@ -5,7 +5,7 @@ from services.retrieval_service import retrieve_chunks
 from services.ai_service import chat_completion
 
 
-def generate_quiz(study_set_id: str, num_questions: int = 5) -> list[dict]:
+def generate_quiz(study_set_id: str, num_questions: int = 5, document_ids: list[str] | None = None) -> list[dict]:
     """Call AI to produce multiple-choice questions from document chunks, then save to DB."""
 
     from database import SessionLocal
@@ -15,14 +15,16 @@ def generate_quiz(study_set_id: str, num_questions: int = 5) -> list[dict]:
     if not study_set:
         return []
 
-    chunks = retrieve_chunks("all key concepts and important details in this material", study_set_id, top_k=10)
+    chunks = retrieve_chunks("academic concepts definitions formulas principles theories important details", study_set_id, top_k=20, document_ids=document_ids)
     if not chunks:
         return []
 
     context = "\n\n".join(f"[{c['filename']} p.{c['page']}] {c['text']}" for c in chunks)
 
     prompt = (
-        f"Based on the following study material, generate {num_questions} multiple-choice questions. "
+        f"Based on the following study material, generate {num_questions} multiple-choice questions about the actual subject content. "
+        "IGNORE any syllabus information, course expectations, grading policies, or administrative notes. "
+        "Focus ONLY on academic concepts, definitions, formulas, theories, and problem-solving. "
         "Each question should have exactly 4 options with one correct answer. "
         "Return ONLY valid JSON as an array of objects: "
         '[{"question": "...", "options": ["A", "B", "C", "D"], "correctIndex": 0, "explanation": "..."}]'

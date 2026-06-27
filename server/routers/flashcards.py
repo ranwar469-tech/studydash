@@ -4,8 +4,13 @@ from database import get_db
 from models import Flashcard
 from schemas import FlashcardResponse, FlashcardMasteryUpdate
 from services.flashcard_service import generate_flashcards as gen_cards
+from pydantic import BaseModel
 
 router = APIRouter(tags=["flashcards"])
+
+
+class GenerateRequest(BaseModel):
+    document_ids: list[str] | None = None
 
 
 @router.get("/api/study-sets/{set_id}/flashcards", response_model=list[FlashcardResponse])
@@ -21,8 +26,8 @@ def list_flashcards(set_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/api/study-sets/{set_id}/flashcards/generate", response_model=list[FlashcardResponse], status_code=201)
-def generate_flashcards(set_id: str, db: Session = Depends(get_db)):
-    cards = gen_cards(set_id)
+def generate_flashcards(set_id: str, body: GenerateRequest = GenerateRequest(), db: Session = Depends(get_db)):
+    cards = gen_cards(set_id, document_ids=body.document_ids)
     if not cards:
         raise HTTPException(400, "Could not generate flashcards. Upload documents first.")
     return [

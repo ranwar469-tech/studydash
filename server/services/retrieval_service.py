@@ -1,23 +1,29 @@
 """Query ChromaDB to find relevant chunks for a user question.
 
-Uses ChromaDB's built-in ONNX model for local embedding — no API key needed.
+Qwen3-Embedding handles queries and documents the same way,
+so we can use query_texts instead of manual embeddings.
 """
 
 from config import TOP_K
 from services.embedding_service import _collection
 
 
-def retrieve_chunks(question: str, study_set_id: str, top_k: int = TOP_K) -> list[dict]:
-    """Search ChromaDB and return top-k matching chunks with scores."""
+def retrieve_chunks(question: str, study_set_id: str, top_k: int = TOP_K,
+                    document_ids: list[str] | None = None) -> list[dict]:
+    """Search ChromaDB (auto-embeds via the collection's HF function) and return top-k chunks."""
 
     collection = _collection(study_set_id, create=False)
     if not collection or collection.count() == 0:
         return []
 
-    results = collection.query(
-        query_texts=[question],
-        n_results=min(top_k, collection.count()),
-    )
+    kwargs = {
+        "query_texts": [question],
+        "n_results": min(top_k, collection.count()),
+    }
+    if document_ids:
+        kwargs["where"] = {"document_id": {"$in": document_ids}}
+
+    results = collection.query(**kwargs)
 
     if not results["documents"] or not results["documents"][0]:
         return []

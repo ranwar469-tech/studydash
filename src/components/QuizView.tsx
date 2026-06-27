@@ -6,9 +6,10 @@ import EmptyState from './EmptyState'
 
 interface Props {
   studySetId: string
+  selectedDocIds: string[]
 }
 
-export default function QuizView({ studySetId }: Props) {
+export default function QuizView({ studySetId, selectedDocIds }: Props) {
   const [quiz, setQuiz] = useState<QuizQuestion[]>([])
   const [qIdx, setQIdx] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
@@ -30,7 +31,7 @@ export default function QuizView({ studySetId }: Props) {
   const handleGenerate = async () => {
     setGenerating(true)
     try {
-      const data = await generateQuiz(studySetId)
+      const data = await generateQuiz(studySetId, selectedDocIds.length > 0 ? selectedDocIds : undefined)
       setQuiz(data)
       setQIdx(0)
       setSelected(null)
@@ -64,11 +65,11 @@ export default function QuizView({ studySetId }: Props) {
     }
   }
 
-  if (loading) return <main className="flex-1 bg-[#071527]"><LoadingSpinner /></main>
+  if (loading) return <main className="h-full w-full bg-[#071527]"><LoadingSpinner /></main>
 
   if (quiz.length === 0 && !generating) {
     return (
-      <main className="flex flex-1 flex-col bg-[#071527]">
+      <main className="flex flex-col h-full w-full bg-[#071527]">
         <EmptyState
           title="No quiz available"
           description="Generate a quiz from your study materials to test your knowledge."
@@ -80,7 +81,7 @@ export default function QuizView({ studySetId }: Props) {
 
   if (generating) {
     return (
-      <main className="flex flex-1 items-center justify-center bg-[#071527]">
+      <main className="flex h-full w-full items-center justify-center bg-[#071527]">
         <LoadingSpinner label="Generating quiz questions..." />
       </main>
     )
@@ -92,7 +93,7 @@ export default function QuizView({ studySetId }: Props) {
   if (finished) {
     const pct = Math.round((score / quiz.length) * 100)
     return (
-      <main className="flex flex-1 items-center justify-center bg-[#071527] p-8">
+      <main className="flex h-full w-full items-center justify-center bg-[#071527] p-8">
         <div className="w-full max-w-md rounded-[2rem] bg-[#0d2038] p-8 text-center shadow-2xl shadow-black/25 ring-1 ring-orange-400/10">
           <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-orange-500/15">
             <span className="text-3xl font-black text-orange-300">{pct}%</span>
@@ -109,22 +110,25 @@ export default function QuizView({ studySetId }: Props) {
   }
 
   return (
-    <main className="flex-1 overflow-y-auto bg-[#071527] p-8">
-      <div className="w-full">
-        <div className="mb-5 flex items-center justify-end">
-          <button onClick={handleGenerate} disabled={generating} className="rounded-2xl bg-[#10243d] px-5 py-3 text-sm font-bold text-slate-200 ring-1 ring-white/10 transition hover:bg-[#163254] disabled:opacity-50">
-            Regenerate
-          </button>
+    <main className="h-full w-full overflow-y-auto bg-[#071527] p-8">
+      <header className="mb-6 rounded-4xl bg-[#0d2038] px-5 py-3.5 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-orange-500">Quiz</p>
+            <h2 className="mt-1 text-2xl font-black text-white">Question {qIdx + 1} of {quiz.length}</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-bold text-orange-400">Score: {score}</span>
+            <button onClick={handleGenerate} disabled={generating} className="rounded-2xl bg-[#10243d] px-4 py-2 text-sm font-bold text-slate-200 ring-1 ring-white/10 transition hover:bg-[#163254] disabled:opacity-50">
+              {generating ? 'Generating...' : 'Regenerate'}
+            </button>
+          </div>
         </div>
-        <header className="mb-6 rounded-[2rem] bg-[#0d2038] p-7 shadow-2xl shadow-black/20 ring-1 ring-orange-400/10">
-          <div className="mb-4 flex justify-between text-sm font-bold text-slate-400">
-            <span>Question {qIdx + 1} of {quiz.length}</span>
-            <span className="text-orange-500">Score: {score}</span>
-          </div>
-          <div className="h-3 overflow-hidden rounded-full bg-[#071527]">
-            <div className="h-full rounded-full bg-gradient-to-r from-[#f97316] to-[#facc15] transition-all duration-500" style={{ width: `${((qIdx + 1) / quiz.length) * 100}%` }} />
-          </div>
-        </header>
+      </header>
+      <div className="w-full">
+        <div className="mb-5 h-2.5 overflow-hidden rounded-full bg-[#071527]">
+          <div className="h-full rounded-full bg-gradient-to-r from-[#f97316] to-[#facc15] transition-all duration-500" style={{ width: `${((qIdx + 1) / quiz.length) * 100}%` }} />
+        </div>
 
         <section className="rounded-[2rem] bg-[#0d2038] p-7 shadow-xl shadow-black/10 ring-1 ring-white/10">
           <h3 className="mb-6 text-2xl font-black leading-tight text-white">{question.question}</h3>

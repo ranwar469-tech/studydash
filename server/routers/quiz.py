@@ -6,8 +6,13 @@ from database import get_db
 from models import QuizQuestion
 from schemas import QuizQuestionResponse, QuizSubmitRequest, QuizSubmitResponse
 from services.quiz_service import generate_quiz as gen_quiz
+from pydantic import BaseModel
 
 router = APIRouter(tags=["quiz"])
+
+
+class GenerateRequest(BaseModel):
+    document_ids: list[str] | None = None
 
 
 @router.get("/api/study-sets/{set_id}/quiz", response_model=list[QuizQuestionResponse])
@@ -23,8 +28,8 @@ def list_quiz(set_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/api/study-sets/{set_id}/quiz/generate", response_model=list[QuizQuestionResponse], status_code=201)
-def generate_quiz(set_id: str, db: Session = Depends(get_db)):
-    questions = gen_quiz(set_id)
+def generate_quiz(set_id: str, body: GenerateRequest = GenerateRequest(), db: Session = Depends(get_db)):
+    questions = gen_quiz(set_id, document_ids=body.document_ids)
     if not questions:
         raise HTTPException(400, "Could not generate quiz. Upload documents first.")
     return [

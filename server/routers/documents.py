@@ -50,10 +50,12 @@ def upload_document(set_id: str, file: UploadFile = File(...), db: Session = Dep
         )
         doc.chunk_count = chunk_count
         db.commit()
-    except ValueError as e:
-        # DeepSeek key not configured — still save the file, skip embedding
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         doc.chunk_count = 0
         db.commit()
+        raise HTTPException(400, f"Document saved, but embedding failed: {e}")
 
     return _doc_response(doc)
 

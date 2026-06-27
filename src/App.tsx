@@ -15,10 +15,15 @@ function App() {
   const [showUpload, setShowUpload] = useState(false)
   const [uploadSetId, setUploadSetId] = useState<string | undefined>()
   const [showCreateSet, setShowCreateSet] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const openUpload = (studySetId: string) => {
     setUploadSetId(studySetId)
     setShowUpload(true)
+  }
+
+  const handleUploadComplete = () => {
+    setRefreshKey(k => k + 1)
   }
 
   const handleCreateSet = async (data: { title: string; subject: string }) => {
@@ -37,13 +42,14 @@ function App() {
 
   if (selectedSet) {
     return (
-      <div className="flex h-screen overflow-hidden bg-[#071527]">
+      <div className="h-screen overflow-hidden bg-[#071527]">
         <StudySetView
           studySet={selectedSet}
           onBack={handleBackToDashboard}
           onImportPdf={(id) => openUpload(id)}
+          refreshKey={refreshKey}
         />
-        <UploadModal open={showUpload} studySetId={uploadSetId} onClose={() => setShowUpload(false)} />
+        <UploadModal open={showUpload} studySetId={uploadSetId} onClose={() => setShowUpload(false)} onUploadComplete={handleUploadComplete} />
       </div>
     )
   }

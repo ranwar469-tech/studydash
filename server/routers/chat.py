@@ -46,7 +46,7 @@ def send_message(set_id: str, data: ChatRequest, db: Session = Depends(get_db)):
     db.add(user_msg)
     db.commit()
 
-    chunks = retrieve_chunks(data.message, set_id)
+    chunks = retrieve_chunks(data.message, set_id, document_ids=data.document_ids)
     context_parts = []
     source_list = []
     for c in chunks:
