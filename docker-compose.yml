@@ -1,0 +1,42 @@
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: studydash-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/app/chroma
+      - uploads_data:/app/uploads
+      - sqlite_data:/app
+    env_file:
+      - ./server/.env
+    environment:
+      - DATABASE_URL=sqlite:///./studydash.db
+      - CHROMA_PERSIST_DIR=/app/chroma
+      - UPLOAD_DIR=/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: studydash-ui
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  chroma_data:
+  uploads_data:
+  sqlite_data:

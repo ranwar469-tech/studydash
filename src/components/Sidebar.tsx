@@ -9,7 +9,6 @@ export default function Sidebar({ activePage, onNavigate }: Props) {
   const navItems: { label: string; page: Page }[] = [
     { label: 'Library', page: 'library' },
     { label: 'Documents', page: 'documents' },
-    { label: 'Study tools', page: 'study-tools' },
   ]
 
   return (

@@ -1,77 +1,139 @@
-"""Generate document summaries using AI and persist to local DB."""
+"""Generate document summaries using AI with map-reduce for full coverage.
+
+Instead of semantically retrieving a few chunks (which misses most of the document),
+this service uses a map-reduce pipeline:
+  1. Get ALL chunks from ChromaDB (no semantic filter)
+  2. Split into batches of ~15 chunks
+  3. Summarize each batch independently (the "map" step)
+  4. Merge all batch summaries into a final structured summary (the "reduce" step)
+
+This ensures every part of the document is accounted for in the final summary.
+"""
 
 import json
-from services.retrieval_service import retrieve_chunks
-from services.ai_service import chat_completion
+from sqlalchemy import select
+from services.retrieval_service import get_all_chunks
+from services.ai_service import structured_completion
+
+BATCH_SYSTEM = (
+    "You are an expert academic summarizer. Summarize the provided chunk of a larger document. "
+    "Focus ONLY on the actual subject content — ignore syllabi, grading policies, "
+    "course logistics, and administrative notes. "
+    "Return ONLY valid JSON: {\"title\": \"brief topic title\", \"points\": [\"key point 1\", \"key point 2\", ...], "
+    "\"concepts\": [\"concept 1\", \"concept 2\", ...]}"
+)
+
+MERGE_SYSTEM = (
+    "You are an expert academic summarizer who creates clear, well-organized study summaries. "
+    "Your summaries help students quickly grasp the key ideas of complex material. Follow these rules:\n"
+    "1. Write a clear overview paragraph (3-5 sentences) that captures the main theme across ALL topics.\n"
+    "2. List 5-8 key takeaways — each should be a standalone insight a student should remember.\n"
+    "3. Break content into logical sections with descriptive titles and 1-2 sentence descriptions.\n"
+    "4. Cover ALL topics provided in the batch summaries — don't drop any major section.\n"
+    "5. Return ONLY valid JSON: {\"overview\": \"...\", \"takeaways\": [\"...\"], \"sections\": [{\"title\": \"...\", \"desc\": \"...\"}]}"
+)
+
+BATCH_SIZE = 15
+MAX_CHUNKS_TOTAL = 150
 
 
-def generate_summary(study_set_id: str, document_ids: list[str] | None = None) -> dict:
-    """Call AI to produce a structured summary, then save to DB."""
+async def generate_summary(study_set_id: str, document_ids: list[str] | None = None) -> dict:
+    """Map-reduce summarization: get all chunks → batch-summarize → merge."""
 
     from database import SessionLocal
     from models import StudySet, Summary
 
-    db = SessionLocal()
-    study_set = db.query(StudySet).filter(StudySet.id == study_set_id).first()
-    if not study_set:
-        db.close()
-        return {"content": "", "sections": [], "takeaways": []}
+    async with SessionLocal() as db:
+        result = await db.execute(select(StudySet).where(StudySet.id == study_set_id))
+        study_set = result.scalars().first()
+        if not study_set:
+            return {"content": "", "sections": [], "takeaways": []}
 
-    chunks = retrieve_chunks("academic concepts definitions formulas principles theories key ideas", study_set_id, top_k=25, document_ids=document_ids)
-    if not chunks:
-        db.close()
-        return {"content": "", "sections": [], "takeaways": []}
+        # ── Step 1: Get ALL chunks (no semantic filter — full coverage) ──
+        all_chunks = get_all_chunks(study_set_id, document_ids=document_ids, max_chunks=MAX_CHUNKS_TOTAL)
+        if not all_chunks:
+            return {"content": "", "sections": [], "takeaways": []}
 
-    context = "\n\n".join(f"[{c['filename']} p.{c['page']}] {c['text']}" for c in chunks)
+        # ── Step 2: Split into batches ──
+        batches = [
+            all_chunks[i : i + BATCH_SIZE]
+            for i in range(0, len(all_chunks), BATCH_SIZE)
+        ]
 
-    prompt = (
-        "Summarize the following study material focusing ONLY on the actual subject content. "
-        "IGNORE any syllabus information, course expectations, grading policies, or administrative notes. "
-        "Provide a structured response with:\n"
-        "1. An overview paragraph explaining the main academic concepts covered\n"
-        "2. Key takeaways as a list of bullet points about the subject matter\n"
-        "3. Section breakdown with title and description for each major topic in the material\n"
-        "Return ONLY valid JSON: "
-        '{"overview": "...", "takeaways": ["..."], "sections": [{"title": "...", "desc": "..."}]}'
-    )
+        # ── Step 3: Summarize each batch (the "map" step) ──
+        batch_summaries = []
+        for batch_idx, batch in enumerate(batches):
+            batch_text = "\n\n".join(
+                f"[{c['filename']} p.{c['page']}] {c['text']}" for c in batch
+            )
+            user_prompt = (
+                f"Document excerpt (batch {batch_idx + 1} of {len(batches)}):\n\n{batch_text}\n\n"
+                "Extract the key points and concepts from this excerpt. "
+                'Return ONLY valid JSON: {"title": "...", "points": [...], "concepts": [...]}'
+            )
+            try:
+                raw = structured_completion(BATCH_SYSTEM, user_prompt)
+                batch_summaries.append(json.loads(raw))
+            except (json.JSONDecodeError, ValueError):
+                print(f"[SummaryService] Batch {batch_idx + 1} JSON parse failed, skipping")
+                continue
 
-    response = chat_completion(context, prompt).strip()
-    response = response.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        if not batch_summaries:
+            return {"content": "", "sections": [], "takeaways": []}
 
-    try:
-        result = json.loads(response)
-    except json.JSONDecodeError:
-        print(f"[SummaryService] JSON parse failed. Raw response:\n{response[:500]}")
-        result = {"overview": response, "sections": [], "takeaways": []}
-
-    existing = db.query(Summary).filter(Summary.study_set_id == study_set_id).first()
-    if existing:
-        existing.overview = result.get("overview", "")
-        existing.sections = json.dumps(result.get("sections", []))
-        existing.takeaways = json.dumps(result.get("takeaways", []))
-    else:
-        s = Summary(
-            study_set_id=study_set_id,
-            overview=result.get("overview", ""),
-            sections=json.dumps(result.get("sections", [])),
-            takeaways=json.dumps(result.get("takeaways", [])),
+        # ── Step 4: Merge batch summaries (the "reduce" step) ──
+        summaries_text = json.dumps(batch_summaries, indent=2)
+        merge_prompt = (
+            f"Below are summaries of {len(batch_summaries)} sections from a document. "
+            f"Combine them into one coherent study summary.\n\n{summaries_text}\n\n"
+            "Create a unified summary covering ALL sections. "
+            'Return ONLY valid JSON: {"overview": "...", "takeaways": [...], '
+            '"sections": [{"title": "...", "desc": "..."}]}'
         )
-        db.add(s)
 
-    db.commit()
-    db.close()
-    return {"content": result.get("overview", ""), "sections": result.get("sections", []), "takeaways": result.get("takeaways", [])}
+        try:
+            raw = structured_completion(MERGE_SYSTEM, merge_prompt)
+            result = json.loads(raw)
+            if not isinstance(result, dict):
+                raise ValueError("Expected a JSON object")
+        except (json.JSONDecodeError, ValueError):
+            print("[SummaryService] Merge JSON parse failed.")
+            result = {"overview": "Could not generate summary.", "sections": [], "takeaways": []}
+
+        # ── Step 5: Persist ──
+        existing = (
+            await db.execute(select(Summary).where(Summary.study_set_id == study_set_id))
+        ).scalars().first()
+        if existing:
+            existing.overview = result.get("overview", "")
+            existing.sections = json.dumps(result.get("sections", []))
+            existing.takeaways = json.dumps(result.get("takeaways", []))
+        else:
+            s = Summary(
+                study_set_id=study_set_id,
+                overview=result.get("overview", ""),
+                sections=json.dumps(result.get("sections", [])),
+                takeaways=json.dumps(result.get("takeaways", [])),
+            )
+            db.add(s)
+
+        await db.commit()
+        return {
+        "content": result.get("overview", ""),
+        "sections": result.get("sections", []),
+        "takeaways": result.get("takeaways", []),
+    }
 
 
-def get_summary(study_set_id: str) -> dict | None:
+async def get_summary(study_set_id: str) -> dict | None:
     """Retrieve the saved summary from the database."""
 
     from database import SessionLocal
     from models import Summary
 
-    db = SessionLocal()
-    existing = db.query(Summary).filter(Summary.study_set_id == study_set_id).first()
-    db.close()
+    async with SessionLocal() as db:
+        result = await db.execute(select(Summary).where(Summary.study_set_id == study_set_id))
+        existing = result.scalars().first()
     if existing:
         return {
             "content": existing.overview,

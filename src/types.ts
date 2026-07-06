@@ -16,6 +16,8 @@ export interface StudySet {
 
 export type StudyMode = 'tutor' | 'summary' | 'flashcards' | 'quiz' | 'notes'
 
+export type ChatTutorMode = 'default' | 'elif' | 'deep'
+
 export interface Flashcard {
   id: string
   question: string
@@ -40,9 +42,11 @@ export interface ChatMessage {
 }
 
 export interface SourceCitation {
+  chunk_id?: number
   filename: string
   page: number
   chunk_text: string
+  document_id?: string
 }
 
 export interface Document {

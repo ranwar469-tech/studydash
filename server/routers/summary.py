@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from limiter import limiter
 from database import get_db
 from models import StudySet
 from schemas import SummaryResponse
@@ -14,24 +16,28 @@ class GenerateRequest(BaseModel):
 
 
 @router.get("/api/study-sets/{set_id}/summary", response_model=SummaryResponse)
-def fetch_summary(set_id: str, db: Session = Depends(get_db)):
-    study_set = db.query(StudySet).filter(StudySet.id == set_id).first()
+@limiter.limit("30/minute")
+async def fetch_summary(request: Request, set_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(StudySet).where(StudySet.id == set_id))
+    study_set = result.scalars().first()
     if not study_set:
         raise HTTPException(404, "Study set not found")
 
-    saved = get_summary(set_id)
+    saved = await get_summary(set_id)
     if not saved:
         raise HTTPException(404, "No summary yet. Generate one first.")
     return SummaryResponse(**saved)
 
 
 @router.post("/api/study-sets/{set_id}/summary", response_model=SummaryResponse)
-def generate_summary(set_id: str, body: GenerateRequest = GenerateRequest(), db: Session = Depends(get_db)):
-    study_set = db.query(StudySet).filter(StudySet.id == set_id).first()
+@limiter.limit("3/minute")
+async def generate_summary(request: Request, set_id: str, body: GenerateRequest = GenerateRequest(), db: AsyncSession = Depends(get_db)):
+    result_query = await db.execute(select(StudySet).where(StudySet.id == set_id))
+    study_set = result_query.scalars().first()
     if not study_set:
         raise HTTPException(404, "Study set not found")
 
-    result = gen_summary(set_id, document_ids=body.document_ids)
+    result = await gen_summary(set_id, document_ids=body.document_ids)
     if not result["content"]:
         raise HTTPException(400, "Could not generate summary. Upload documents first.")
     return SummaryResponse(**result)

@@ -16,6 +16,7 @@ export default function FlashcardView({ studySetId, selectedDocIds }: Props) {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState('')
+  const [cardCount, setCardCount] = useState(8)  // 5=low, 8=medium, 12=high
 
   useEffect(() => {
     let cancelled = false
@@ -30,7 +31,7 @@ export default function FlashcardView({ studySetId, selectedDocIds }: Props) {
     setGenerating(true)
     setGenError('')
     try {
-      const data = await generateFlashcards(studySetId, selectedDocIds.length > 0 ? selectedDocIds : undefined)
+      const data = await generateFlashcards(studySetId, selectedDocIds.length > 0 ? selectedDocIds : undefined, cardCount)
       setCards(data)
       setIdx(0)
       setFlipped(false)
@@ -49,11 +50,26 @@ export default function FlashcardView({ studySetId, selectedDocIds }: Props) {
   if (cards.length === 0 && !generating) {
     return (
       <main className="flex flex-col h-full w-full bg-[#071527]">
-        <EmptyState
-          title="No flashcards yet"
-          description="Generate flashcards from your study materials using AI."
-          action={{ label: 'Generate Flashcards', onClick: handleGenerate }}
-        />
+        <div className="flex flex-col items-center gap-4 mt-20">
+          <EmptyState
+            title="No flashcards yet"
+            description="Generate flashcards from your study materials using AI."
+            action={{ label: generating ? 'Generating...' : 'Generate Flashcards', onClick: handleGenerate, disabled: generating }}
+          />
+          <select
+            value={cardCount}
+            onChange={e => setCardCount(Number(e.target.value))}
+            disabled={generating}
+            className="rounded-2xl bg-[#0d2038] px-5 py-3 text-sm font-semibold text-slate-200 outline-none ring-1 ring-white/10 transition focus:ring-2 focus:ring-orange-400/50 cursor-pointer disabled:opacity-50"
+          >
+            <option value={5}>5 cards (Low)</option>
+            <option value={8}>8 cards (Medium)</option>
+            <option value={12}>12 cards (High)</option>
+          </select>
+          {genError && (
+            <p className="text-sm font-semibold text-red-300">{genError}</p>
+          )}
+        </div>
       </main>
     )
   }
@@ -76,6 +92,16 @@ export default function FlashcardView({ studySetId, selectedDocIds }: Props) {
             >
               {generating ? 'Generating...' : 'Regenerate'}
             </button>
+            <select
+              value={cardCount}
+              onChange={e => setCardCount(Number(e.target.value))}
+              disabled={generating}
+              className="shrink-0 rounded-2xl bg-[#071527] px-4 py-2.5 text-sm font-semibold text-slate-200 outline-none ring-1 ring-white/10 transition focus:ring-2 focus:ring-orange-400/50 cursor-pointer disabled:opacity-50"
+            >
+              <option value={5}>5 cards (Low)</option>
+              <option value={8}>8 cards (Medium)</option>
+              <option value={12}>12 cards (High)</option>
+            </select>
           </div>
         </div>
       </header>
@@ -88,25 +114,25 @@ export default function FlashcardView({ studySetId, selectedDocIds }: Props) {
           {generating ? (
             <LoadingSpinner label="Generating flashcards..." />
           ) : (
-            <>
+            <div className="flex w-full max-w-3xl flex-col items-center gap-6">
               <div className="flex justify-center gap-2">
                 {cards.map((_, i) => (
                   <div key={i} className={`h-2.5 rounded-full transition-all ${i === idx ? 'w-10 bg-[#f97316]' : 'w-2.5 bg-[#243957]'}`} />
                 ))}
               </div>
 
-              <div className="w-full max-w-3xl perspective mx-auto" style={{ minHeight: '380px' }}>
+              <div className="w-full perspective" style={{ minHeight: '380px' }}>
                 <div className={`card-inner relative w-full cursor-pointer ${flipped ? 'card-flipped' : ''}`}
                   style={{ minHeight: '380px' }}
                   onClick={() => setFlipped(!flipped)}>
                   <div className="card-front absolute inset-0 flex flex-col items-center justify-center rounded-[2rem] bg-[#0d2038] p-10 text-center shadow-2xl shadow-black/25 ring-1 ring-orange-400/10">
                     <p className="mb-4 text-sm font-black uppercase tracking-[0.16em] text-orange-500">Question</p>
-                    <p className="max-w-xl text-3xl font-black leading-tight text-white">{card.question}</p>
+                    <p className="max-w-xl text-2xl font-black leading-tight text-white">{card.question}</p>
                     <p className="mt-8 text-sm font-semibold text-slate-400">Click to reveal</p>
                   </div>
                   <div className="card-back absolute inset-0 flex flex-col items-center justify-center rounded-[2rem] bg-[#10243d] p-10 text-center text-white shadow-2xl shadow-black/25 ring-1 ring-orange-400/20">
                     <p className="mb-4 text-sm font-black uppercase tracking-[0.16em] text-teal-300">Answer</p>
-                    <p className="max-w-xl text-xl leading-relaxed text-slate-100">{card.answer}</p>
+                    <p className="max-w-xl text-lg leading-relaxed text-slate-100">{card.answer}</p>
                     {card.explanation && (
                       <p className="mt-4 text-sm text-slate-400 max-w-lg">{card.explanation}</p>
                     )}
@@ -118,7 +144,7 @@ export default function FlashcardView({ studySetId, selectedDocIds }: Props) {
                 <button onClick={prev} className="rounded-2xl bg-[#10243d] px-6 py-3 text-sm font-bold text-slate-200 shadow-sm ring-1 ring-white/10 transition hover:-translate-y-0.5 hover:bg-[#163254]">Previous</button>
                 <button onClick={next} className="rounded-2xl bg-[#f97316] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:-translate-y-0.5 hover:bg-[#fb923c]">Next</button>
               </div>
-            </>
+            </div>
           )}
         </div>
     </main>

@@ -1,6 +1,9 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from limiter import limiter
 from database import init_db
 
 from routers.study_sets import router as study_sets_router
@@ -14,11 +17,16 @@ from routers.notes import router as notes_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    await init_db()
     yield
 
 
 app = FastAPI(title="AI Study Companion API", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, lambda req, exc: JSONResponse(
+    status_code=429,
+    content={"detail": f"Rate limit exceeded. {exc.detail}"},
+))
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,5 +46,6 @@ app.include_router(notes_router)
 
 
 @app.get("/")
-def root():
+@limiter.limit("60/minute")
+async def root(request: Request):
     return {"status": "ok", "service": "AI Study Companion"}

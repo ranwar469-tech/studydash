@@ -4,7 +4,7 @@ interface Props {
   icon?: ReactNode
   title: string
   description: string
-  action?: { label: string; onClick: () => void }
+  action?: { label: string; onClick: () => void; disabled?: boolean }
 }
 
 export default function EmptyState({ icon, title, description, action }: Props) {
@@ -25,7 +25,8 @@ export default function EmptyState({ icon, title, description, action }: Props) 
       {action && (
         <button
           onClick={action.onClick}
-          className="rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:bg-[#fb923c]"
+          disabled={action.disabled}
+          className="rounded-2xl bg-[#f97316] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:bg-[#fb923c] disabled:opacity-50"
         >
           {action.label}
         </button>

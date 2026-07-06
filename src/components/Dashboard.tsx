@@ -13,6 +13,7 @@ export default function Dashboard({ onSelectSet, onCreateSet }: Props) {
   const [studySets, setStudySets] = useState<StudySet[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [activeFilter, setActiveFilter] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -37,6 +38,12 @@ export default function Dashboard({ onSelectSet, onCreateSet }: Props) {
 
   const totalMastered = studySets.reduce((s, set) => s + set.progress.mastered, 0)
   const totalDocs = studySets.reduce((s, set) => s + set.documentCount, 0)
+
+  // Extract unique subjects for filters
+  const subjects = [...new Set(studySets.map(s => s.subject).filter(Boolean))].sort()
+  const filteredSets = activeFilter
+    ? studySets.filter(s => s.subject === activeFilter)
+    : studySets
 
   return (
     <main className="flex-1 overflow-y-auto bg-[#071527]">
@@ -79,8 +86,45 @@ export default function Dashboard({ onSelectSet, onCreateSet }: Props) {
               ))}
             </section>
 
+            {/* Category filter pills */}
+            {subjects.length > 1 && (
+              <div className="mb-6 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setActiveFilter(null)}
+                  className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
+                    activeFilter === null
+                      ? 'bg-[#f97316] text-white shadow-lg shadow-orange-950/30'
+                      : 'bg-[#0d2038] text-slate-400 ring-1 ring-white/10 hover:bg-[#10243d] hover:text-white'
+                  }`}
+                >
+                  All
+                </button>
+                {subjects.map(subject => (
+                  <button
+                    key={subject}
+                    onClick={() => setActiveFilter(subject === activeFilter ? null : subject)}
+                    className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
+                      activeFilter === subject
+                        ? 'bg-[#f97316] text-white shadow-lg shadow-orange-950/30'
+                        : 'bg-[#0d2038] text-slate-400 ring-1 ring-white/10 hover:bg-[#10243d] hover:text-white'
+                    }`}
+                  >
+                    {subject}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {filteredSets.length === 0 ? (
+              <div className="rounded-3xl bg-[#0d2038] p-10 text-center ring-1 ring-white/10">
+                <p className="text-sm font-semibold text-slate-400">No study sets match this filter.</p>
+                <button onClick={() => setActiveFilter(null)} className="mt-3 text-sm font-bold text-orange-400 hover:text-orange-300 transition">
+                  Clear filter
+                </button>
+              </div>
+            ) : (
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-              {studySets.map((set) => {
+              {filteredSets.map((set) => {
                 const total = set.progress.unfamiliar + set.progress.learning + set.progress.familiar + set.progress.mastered
                 const pct = total > 0 ? Math.round((set.progress.mastered / total) * 100) : 0
                 return (
@@ -124,6 +168,7 @@ export default function Dashboard({ onSelectSet, onCreateSet }: Props) {
                 )
               })}
             </div>
+            )}
           </>
         )}
       </div>

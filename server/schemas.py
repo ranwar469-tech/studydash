@@ -7,6 +7,11 @@ class StudySetCreate(BaseModel):
     subject: str = "General"
 
 
+class StudySetUpdate(BaseModel):
+    title: str | None = None
+    subject: str | None = None
+
+
 class StudySetResponse(BaseModel):
     id: str
     title: str
@@ -22,6 +27,7 @@ class DocumentResponse(BaseModel):
     study_set_title: str = ""
     filename: str
     chunk_count: int
+    ocr_pages: int = 0
     uploaded_at: datetime
 
 
@@ -60,6 +66,7 @@ class ChatMessageResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    mode: str | None = None  # 'beginner' | 'exam' | 'deep' | 'quick' | 'default'
     document_ids: list[str] | None = None
 
 

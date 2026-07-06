@@ -13,6 +13,7 @@ class Document(Base):
     filename = Column(String(255), nullable=False)
     filepath = Column(String(500), nullable=False)
     chunk_count = Column(Integer, default=0)
+    ocr_pages = Column(Integer, default=0)                     # how many pages needed OCR
     uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     study_set = relationship("StudySet", back_populates="documents")

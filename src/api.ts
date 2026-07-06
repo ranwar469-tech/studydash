@@ -1,6 +1,6 @@
 import type { StudySet, Flashcard, QuizQuestion, ChatMessage, Note, SourceCitation } from './types'
 
-const BASE = 'http://localhost:8000/api'
+const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -50,6 +50,11 @@ export async function deleteStudySet(id: string): Promise<void> {
   await request(`/study-sets/${id}`, { method: 'DELETE' })
 }
 
+export async function updateStudySet(id: string, data: { title?: string; subject?: string }): Promise<StudySet> {
+  const raw = await request<RawStudySet>(`/study-sets/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+  return mapSet(raw)
+}
+
 /* ── Documents ──────────────────────────────────────────── */
 
 export interface DocInfo {
@@ -58,6 +63,7 @@ export interface DocInfo {
   study_set_title: string
   filename: string
   chunk_count: number
+  ocr_pages: number
   uploaded_at: string
 }
 
@@ -107,11 +113,12 @@ export async function sendChatMessage(
   onChunk: (text: string) => void,
   onSources: (sources: SourceCitation[]) => void,
   documentIds?: string[],
+  mode?: string,
 ): Promise<void> {
   const res = await fetch(`${BASE}/study-sets/${setId}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, document_ids: documentIds }),
+    body: JSON.stringify({ message, document_ids: documentIds, mode }),
   })
   if (!res.ok) throw new Error('Chat request failed')
   const reader = res.body!.getReader()
@@ -125,12 +132,19 @@ export async function sendChatMessage(
     buffer = lines.pop() ?? ''
     for (const line of lines) {
       if (line.startsWith('data: ')) {
-        const data = line.slice(6)
-        if (data === '[DONE]') return
-        if (data.startsWith('[SOURCES]')) {
-          try { onSources(JSON.parse(data.slice(9))) } catch { /* ignore */ }
+        const raw = line.slice(6)
+        if (raw === '[DONE]') return
+        if (raw.startsWith('[SOURCES]')) {
+          try { onSources(JSON.parse(raw.slice(9))) } catch { /* ignore */ }
         } else {
-          onChunk(data)
+          // Tokens are JSON-encoded by the backend: e.g. data: "Hello"
+          try {
+            const token = JSON.parse(raw)
+            if (typeof token === 'string') onChunk(token)
+          } catch {
+            // Fallback for plain text (backward compatibility)
+            onChunk(raw)
+          }
         }
       }
     }
@@ -143,10 +157,10 @@ export async function fetchFlashcards(setId: string): Promise<Flashcard[]> {
   return request<Flashcard[]>(`/study-sets/${setId}/flashcards`)
 }
 
-export async function generateFlashcards(setId: string, documentIds?: string[]): Promise<Flashcard[]> {
+export async function generateFlashcards(setId: string, documentIds?: string[], count?: number): Promise<Flashcard[]> {
   return request<Flashcard[]>(`/study-sets/${setId}/flashcards/generate`, {
     method: 'POST',
-    body: JSON.stringify({ document_ids: documentIds }),
+    body: JSON.stringify({ document_ids: documentIds, count }),
   })
 }
 

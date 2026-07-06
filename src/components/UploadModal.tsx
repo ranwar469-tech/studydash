@@ -20,8 +20,10 @@ export default function UploadModal({ open, studySetId, onClose, onUploadComplet
 
   const handleFile = (f: File | null) => {
     if (!f) return
-    if (!f.name.endsWith('.pdf')) {
-      setError('Only PDF files are supported')
+    const allowed = ['.pdf', '.docx', '.pptx', '.txt', '.md', '.csv']
+    const ext = '.' + f.name.split('.').pop()?.toLowerCase()
+    if (!allowed.includes(ext)) {
+      setError('Supported: PDF, DOCX, PPTX, TXT, MD, CSV')
       return
     }
     setFile(f)
@@ -55,10 +57,27 @@ export default function UploadModal({ open, studySetId, onClose, onUploadComplet
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
 
-        <h2 className="text-xl font-black text-white mb-1">Upload PDF</h2>
-        <p className="text-sm text-slate-400 mb-6">
+        <h2 className="text-xl font-black text-white mb-1">Upload Document</h2>
+        <p className="text-sm text-slate-400 mb-4">
           {studySetId ? 'Add documents to this study set' : 'Select a study set first'}
         </p>
+
+        {studySetId && (
+          <div className="mb-5 flex flex-wrap gap-1.5">
+            {[
+              { ext: 'PDF', color: 'bg-red-500/10 text-red-300 ring-red-500/20' },
+              { ext: 'DOCX', color: 'bg-blue-500/10 text-blue-300 ring-blue-500/20' },
+              { ext: 'PPTX', color: 'bg-orange-500/10 text-orange-300 ring-orange-500/20' },
+              { ext: 'TXT', color: 'bg-slate-500/10 text-slate-300 ring-slate-500/20' },
+              { ext: 'CSV', color: 'bg-green-500/10 text-green-300 ring-green-500/20' },
+              { ext: 'MD', color: 'bg-purple-500/10 text-purple-300 ring-purple-500/20' },
+            ].map(({ ext, color }) => (
+              <span key={ext} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold ring-1 ${color}`}>
+                {ext}
+              </span>
+            ))}
+          </div>
+        )}
 
         {!studySetId ? (
           <p className="rounded-2xl bg-[#10243d] px-4 py-5 text-sm font-semibold text-slate-400 text-center ring-1 ring-white/10">
@@ -80,10 +99,10 @@ export default function UploadModal({ open, studySetId, onClose, onUploadComplet
               <svg className="h-9 w-9 text-slate-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              <p className="text-sm font-semibold text-slate-300">{file ? file.name : 'Drop PDF here or click to browse'}</p>
-              <p className="text-xs text-slate-500 mt-1">PDF files up to 25MB</p>
+              <p className="text-sm font-semibold text-slate-300">{file ? file.name : 'Drop a file here or click to browse'}</p>
+              <p className="text-xs text-slate-500 mt-1">Supports PDF, DOCX, PPTX, TXT, CSV, MD</p>
             </div>
-            <input ref={inputRef} type="file" accept=".pdf" className="hidden" onChange={e => handleFile(e.target.files?.[0] ?? null)} />
+            <input ref={inputRef} type="file" accept=".pdf,.docx,.pptx,.txt,.md,.csv" className="hidden" onChange={e => handleFile(e.target.files?.[0] ?? null)} />
 
             {file && (
               <p className="mb-4 rounded-xl bg-[#10243d] px-4 py-2 text-sm font-semibold text-slate-300 flex items-center gap-2">
@@ -113,7 +132,7 @@ export default function UploadModal({ open, studySetId, onClose, onUploadComplet
               disabled={!file || uploading}
               className="w-full rounded-2xl bg-[#f97316] py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-950/30 transition hover:bg-[#fb923c] disabled:opacity-40"
             >
-              {uploading ? 'Uploading...' : 'Upload PDF'}
+              {uploading ? 'Uploading...' : 'Upload Document'}
             </button>
           </>
         )}

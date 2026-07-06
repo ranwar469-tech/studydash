@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import type { StudySet, StudyMode } from '../types'
 import type { DocInfo } from '../api'
-import { fetchSetDocuments } from '../api'
+import { fetchSetDocuments, updateStudySet } from '../api'
 import StudySetSidebar from './StudySetSidebar'
 import ContextSidebar from './ContextSidebar'
 import ChatView from './ChatView'
@@ -23,6 +23,16 @@ export default function StudySetView({ studySet, onBack, onImportPdf, refreshKey
   const [documents, setDocuments] = useState<DocInfo[]>([])
   const [loadingDocuments, setLoadingDocuments] = useState(true)
   const [showContext, setShowContext] = useState(true)
+  const [localSet, setLocalSet] = useState(studySet)
+
+  useEffect(() => { setLocalSet(studySet) }, [studySet])
+
+  const handleRename = useCallback(async (title: string, subject: string) => {
+    try {
+      const updated = await updateStudySet(localSet.id, { title, subject })
+      setLocalSet(updated)
+    } catch { /* ignore */ }
+  }, [localSet.id])
 
   useEffect(() => {
     let cancelled = false
@@ -79,11 +89,12 @@ export default function StudySetView({ studySet, onBack, onImportPdf, refreshKey
   return (
     <div className="flex h-full min-h-0 overflow-hidden bg-[#071527] text-slate-100">
       <StudySetSidebar
-        studySet={studySet}
+        studySet={localSet}
         activeMode={activeMode}
         onModeChange={setActiveMode}
         onBack={onBack}
-        onImportPdf={() => onImportPdf(studySet.id)}
+        onImportPdf={() => onImportPdf(localSet.id)}
+        onRename={handleRename}
         docCount={documents.length}
       />
       <div className="min-w-0 flex-1 overflow-hidden">

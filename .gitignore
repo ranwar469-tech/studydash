@@ -28,3 +28,4 @@ server/uploads/
 *.sln
 *.sw?
 .env
+.venv

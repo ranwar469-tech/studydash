@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { StudySet, StudyMode } from '../types'
 
 interface Props {
@@ -6,6 +7,7 @@ interface Props {
   onModeChange: (mode: StudyMode) => void
   onBack: () => void
   onImportPdf: () => void
+  onRename: (title: string, subject: string) => void
   docCount: number
 }
 
@@ -17,7 +19,23 @@ const modes: { mode: StudyMode; label: string }[] = [
   { mode: 'notes', label: 'Notes' },
 ]
 
-export default function StudySetSidebar({ studySet, activeMode, onModeChange, onBack, onImportPdf, docCount }: Props) {
+export default function StudySetSidebar({ studySet, activeMode, onModeChange, onBack, onImportPdf, onRename, docCount }: Props) {
+  const [editTitle, setEditTitle] = useState(false)
+  const [editSubject, setEditSubject] = useState(false)
+  const [title, setTitle] = useState(studySet.title)
+  const [subject, setSubject] = useState(studySet.subject)
+
+  const saveTitle = () => {
+    const trimmed = title.trim()
+    if (trimmed && trimmed !== studySet.title) onRename(trimmed, studySet.subject)
+    setEditTitle(false)
+  }
+  const saveSubject = () => {
+    const trimmed = subject.trim()
+    if (trimmed && trimmed !== studySet.subject) onRename(studySet.title, trimmed)
+    setEditSubject(false)
+  }
+
   const total = studySet.progress.unfamiliar + studySet.progress.learning + studySet.progress.familiar + studySet.progress.mastered
   const pct = total > 0 ? Math.round((studySet.progress.mastered / total) * 100) : 0
 
@@ -44,8 +62,16 @@ export default function StudySetSidebar({ studySet, activeMode, onModeChange, on
         </button>
 
         <div className="rounded-3xl bg-[#0d2038] p-4 shadow-xl shadow-black/20 ring-1 ring-orange-400/10">
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-orange-500">{studySet.subject}</p>
-          <h2 className="mt-1 text-lg font-black leading-tight text-white">{studySet.title}</h2>
+          {editSubject ? (
+            <input autoFocus value={subject} onChange={e => setSubject(e.target.value)} onBlur={saveSubject} onKeyDown={e => { if (e.key === 'Enter') saveSubject(); if (e.key === 'Escape') { setSubject(studySet.subject); setEditSubject(false) } }} className="w-full rounded-xl bg-[#071527] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-orange-500 outline-none ring-1 ring-orange-400/30" />
+          ) : (
+            <button onClick={() => setEditSubject(true)} className="text-left text-xs font-bold uppercase tracking-[0.14em] text-orange-500 hover:text-orange-400 transition cursor-pointer" title="Click to rename category">{studySet.subject} ✎</button>
+          )}
+          {editTitle ? (
+            <input autoFocus value={title} onChange={e => setTitle(e.target.value)} onBlur={saveTitle} onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setTitle(studySet.title); setEditTitle(false) } }} className="mt-1 w-full rounded-xl bg-[#071527] px-3 py-1.5 text-lg font-black leading-tight text-white outline-none ring-1 ring-orange-400/30" />
+          ) : (
+            <button onClick={() => setEditTitle(true)} className="mt-1 text-left text-lg font-black leading-tight text-white hover:text-orange-400 transition cursor-pointer" title="Click to rename">{studySet.title} ✎</button>
+          )}
           <div className="mt-3 flex gap-2">
             <div className="flex-1 rounded-xl bg-[#071527] px-3 py-2">
               <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">Docs</p>

@@ -1,7 +1,8 @@
 import json
-import json
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from limiter import limiter
 from database import get_db
 from models import QuizQuestion
 from schemas import QuizQuestionResponse, QuizSubmitRequest, QuizSubmitResponse
@@ -16,8 +17,10 @@ class GenerateRequest(BaseModel):
 
 
 @router.get("/api/study-sets/{set_id}/quiz", response_model=list[QuizQuestionResponse])
-def list_quiz(set_id: str, db: Session = Depends(get_db)):
-    questions = db.query(QuizQuestion).filter(QuizQuestion.study_set_id == set_id).all()
+@limiter.limit("30/minute")
+async def list_quiz(request: Request, set_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(QuizQuestion).where(QuizQuestion.study_set_id == set_id))
+    questions = result.scalars().all()
     return [
         QuizQuestionResponse(
             id=q.id, question=q.question, options=json.loads(q.options),
@@ -28,8 +31,9 @@ def list_quiz(set_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/api/study-sets/{set_id}/quiz/generate", response_model=list[QuizQuestionResponse], status_code=201)
-def generate_quiz(set_id: str, body: GenerateRequest = GenerateRequest(), db: Session = Depends(get_db)):
-    questions = gen_quiz(set_id, document_ids=body.document_ids)
+@limiter.limit("5/minute")
+async def generate_quiz(request: Request, set_id: str, body: GenerateRequest = GenerateRequest(), db: AsyncSession = Depends(get_db)):
+    questions = await gen_quiz(set_id, document_ids=body.document_ids)
     if not questions:
         raise HTTPException(400, "Could not generate quiz. Upload documents first.")
     return [
@@ -42,8 +46,10 @@ def generate_quiz(set_id: str, body: GenerateRequest = GenerateRequest(), db: Se
 
 
 @router.post("/api/study-sets/{set_id}/quiz/submit", response_model=QuizSubmitResponse)
-def submit_quiz(set_id: str, data: QuizSubmitRequest, db: Session = Depends(get_db)):
-    questions = db.query(QuizQuestion).filter(QuizQuestion.study_set_id == set_id).all()
+@limiter.limit("20/minute")
+async def submit_quiz(request: Request, set_id: str, data: QuizSubmitRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(QuizQuestion).where(QuizQuestion.study_set_id == set_id))
+    questions = result.scalars().all()
     q_map = {q.id: q for q in questions}
     score = 0
     for answer in data.answers:
