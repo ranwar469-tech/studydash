@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  # ── Backend: lint + type check ─────────────────────────
+  # ── Backend: lint + tests ──────────────────────────────
   backend:
     runs-on: ubuntu-latest
     defaults:
@@ -26,7 +26,10 @@ jobs:
       - name: Syntax check (all Python files)
         run: python -m compileall .
 
-  # ── Frontend: lint + build ─────────────────────────────
+      - name: Run tests
+        run: python -m pytest tests/ -v
+
+  # ── Frontend: lint + tests + build ─────────────────────
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -41,6 +44,9 @@ jobs:
 
       - name: TypeScript type-check
         run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
 
       - name: Build
         run: npm run build
