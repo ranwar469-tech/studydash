@@ -15,8 +15,8 @@ import {
   fetchAllDocuments, fetchSetDocuments, deleteDocument,
   fetchChatHistory,
   fetchFlashcards, generateFlashcards,
-  fetchQuiz, generateQuiz, submitQuiz,
-  fetchSummary, generateSummary,
+  fetchQuiz, submitQuiz,
+  fetchSummary,
   fetchNotes, createNote, updateNote, deleteNote,
 } from '../api'
 

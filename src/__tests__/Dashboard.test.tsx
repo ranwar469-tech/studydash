@@ -9,7 +9,7 @@ vi.mock('../api', () => ({
   deleteStudySet: vi.fn(),
 }))
 
-import { fetchStudySets, deleteStudySet } from '../api'
+import { fetchStudySets } from '../api'
 
 const mockSets = [
   { id: '1', title: 'Biology', subject: 'Science', documentCount: 3,
