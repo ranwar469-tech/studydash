@@ -1,9 +1,6 @@
 """Test Notes CRUD endpoints."""
 
-import pytest
 
-
-@pytest.mark.anyio
 async def test_create_note(client):
     # Need a study set first
     ss = await client.post("/api/study-sets", json={"title": "CS Notes"})
@@ -21,7 +18,6 @@ async def test_create_note(client):
     assert "id" in data
 
 
-@pytest.mark.anyio
 async def test_create_note_missing_set(client):
     res = await client.post("/api/study-sets/nonexistent/notes", json={
         "title": "Nope", "content": "Will fail",
@@ -29,7 +25,6 @@ async def test_create_note_missing_set(client):
     assert res.status_code == 404
 
 
-@pytest.mark.anyio
 async def test_list_notes_empty(client):
     ss = await client.post("/api/study-sets", json={"title": "Empty"})
     set_id = ss.json()["id"]
@@ -39,7 +34,6 @@ async def test_list_notes_empty(client):
     assert res.json() == []
 
 
-@pytest.mark.anyio
 async def test_list_notes(client):
     ss = await client.post("/api/study-sets", json={"title": "Chemistry"})
     set_id = ss.json()["id"]
@@ -56,7 +50,6 @@ async def test_list_notes(client):
     assert len(res.json()) == 2
 
 
-@pytest.mark.anyio
 async def test_update_note(client):
     ss = await client.post("/api/study-sets", json={"title": "Math"})
     set_id = ss.json()["id"]
@@ -75,7 +68,6 @@ async def test_update_note(client):
     assert data["content"] == "Limits & derivatives."
 
 
-@pytest.mark.anyio
 async def test_delete_note(client):
     ss = await client.post("/api/study-sets", json={"title": "History"})
     set_id = ss.json()["id"]
@@ -93,7 +85,6 @@ async def test_delete_note(client):
     assert res.json() == []
 
 
-@pytest.mark.anyio
 async def test_delete_note_not_found(client):
     res = await client.delete("/api/notes/nonexistent")
     assert res.status_code == 404

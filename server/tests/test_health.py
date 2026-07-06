@@ -1,9 +1,6 @@
 """Test health check endpoint."""
 
-import pytest
 
-
-@pytest.mark.anyio
 async def test_root_health(client):
     res = await client.get("/")
     assert res.status_code == 200

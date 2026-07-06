@@ -14,9 +14,9 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="module")
 async def client():
-    """Session-scoped client — the FastAPI app boots once."""
+    """Module-scoped client — FastAPI app boots once per test file."""
     tmpdir = tempfile.mkdtemp(prefix="studydash_test_")
 
     # Point the app at our temp world (use plain sqlite — database.py adds +aiosqlite)
