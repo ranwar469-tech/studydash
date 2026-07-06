@@ -17,12 +17,9 @@ describe('Sidebar', () => {
   })
 
   it('highlights active page button', () => {
-    const { rerender } = render(<Sidebar activePage="library" onNavigate={vi.fn()} />)
-    // Can't easily test CSS class, but we can verify both buttons exist
-    expect(screen.getAllByRole('button')).toHaveLength(2)
-
-    rerender(<Sidebar activePage="documents" onNavigate={vi.fn()} />)
-    expect(screen.getAllByRole('button')).toHaveLength(2)
+    render(<Sidebar activePage="library" onNavigate={vi.fn()} />)
+    // Library + Documents + footer folder = 3 buttons total
+    expect(screen.getAllByRole('button')).toHaveLength(3)
   })
 
   it('calls onNavigate with correct page when button clicked', async () => {

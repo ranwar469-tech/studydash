@@ -205,7 +205,7 @@ describe('deleteNote()', () => {
 describe('error handling', () => {
   it('falls back to statusText when body has no detail', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-      ok: false, status: 500,
+      ok: false, status: 500, statusText: 'Internal Server Error',
       json: () => Promise.reject(new Error('not json')),
       text: () => Promise.resolve('Internal Server Error'),
     } as unknown as Response)
